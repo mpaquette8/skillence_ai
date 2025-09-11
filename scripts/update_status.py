@@ -43,7 +43,7 @@ def extract_mvp_musts(mvp_md: str, limit: int = 12) -> List[str]:
         if item:
             items.append(item)
     # de-dupe, garde l'ordre
-    seen = set()
+    seen: set[str] = set()
     deduped: list[str] = []
     for it in items:
         if it not in seen:
@@ -61,7 +61,7 @@ def detect_simple_endpoints(repo_files: list[str]) -> list[str]:
     # indices basés sur le MVP
     if any(f.endswith("api/routes/health.py") for f in repo_files) or any("GET /v1/health" in f for f in repo_files):
         endpoints.append("GET /v1/health")
-    # hueristiques courantes
+    # heuristiques courantes
     if any("lessons" in f and f.endswith(".py") and "/api/" in f for f in repo_files):
         # on liste les 2 principaux du MVP
         endpoints.extend(["POST /v1/lessons", "GET /v1/lessons/{id}"])
@@ -107,6 +107,11 @@ def main() -> None:
     if not endpoints and "GET /v1/health" in readme:
         endpoints.append("GET /v1/health")
 
+    if endpoints:
+        endpoints_md = "\n".join(f"- {e}" for e in endpoints)
+    else:
+        endpoints_md = "_Aucun détecté (voir README/api)._"
+
     # Infos CI (liens utiles si exécuté dans GitHub Actions)
     run_link = ""
     server = os.getenv("GITHUB_SERVER_URL")
@@ -133,7 +138,7 @@ def main() -> None:
 - Tests directory present: {essentials['tests']}
 
 ## Endpoints détectés (heuristique)
-{("- " + chr(10) .join(f"- {e}" for e in endpoints)) if endpoints else "_Aucun détecté (voir README/api)._"}
+{endpoints_md}
  
 ## MVP Musts Snapshot
 {chr(10).join(f"- [ ] {m}" for m in musts)}
