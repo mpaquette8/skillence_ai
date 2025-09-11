@@ -34,7 +34,9 @@ jobs:
 
       - name: Run tests
         id: tests
-        run: pytest -q
+        run: |
+          export PYTHONPATH=$PWD
+          pytest -q
         continue-on-error: true
 
       - name: Collect meta
