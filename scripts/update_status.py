@@ -23,9 +23,6 @@ def list_tree(root: Path) -> list[str]:
 
 
 def extract_mvp_musts(mvp_md: str, limit: int = 12) -> List[str]:
-    """
-    Récupère la liste 'Must' depuis MVP.md (heuristique simple et robuste).
-    """
     if not mvp_md:
         return []
     m = re.search(r"(?s)##+\s*✅?\s*Must.*?(?:\n##+|\Z)", mvp_md, flags=re.I)
@@ -42,7 +39,6 @@ def extract_mvp_musts(mvp_md: str, limit: int = 12) -> List[str]:
         item = raw.lstrip("-*•[] ").strip()
         if item:
             items.append(item)
-    # de-dupe, garde l'ordre
     seen: set[str] = set()
     deduped: list[str] = []
     for it in items:
@@ -53,19 +49,11 @@ def extract_mvp_musts(mvp_md: str, limit: int = 12) -> List[str]:
 
 
 def detect_simple_endpoints(repo_files: list[str]) -> list[str]:
-    """
-    Détection ultra-simple des endpoints connus via inspection des chemins.
-    Ne remplace pas une introspection FastAPI, mais donne un signal utile.
-    """
     endpoints: list[str] = []
-    # indices basés sur le MVP
     if any(f.endswith("api/routes/health.py") for f in repo_files) or any("GET /v1/health" in f for f in repo_files):
         endpoints.append("GET /v1/health")
-    # heuristiques courantes
     if any("lessons" in f and f.endswith(".py") and "/api/" in f for f in repo_files):
-        # on liste les 2 principaux du MVP
         endpoints.extend(["POST /v1/lessons", "GET /v1/lessons/{id}"])
-    # dédup
     endpoints = list(dict.fromkeys(endpoints))
     return endpoints
 
@@ -93,7 +81,6 @@ def main() -> None:
         "tests": "✅" if any(f.startswith("tests/") for f in repo_files) else "❌",
     }
 
-    # Musts du MVP
     musts = extract_mvp_musts(mvp_md) or [
         "FastAPI en place avec health check",
         "POST /v1/lessons qui génère une leçon complète (plan + texte)",
@@ -101,8 +88,8 @@ def main() -> None:
         "Logs simples (INFO)",
         "Tests : health + happy path",
     ]
+    musts_md = "\n".join(f"- [ ] {m}" for m in musts)
 
-    # Endpoints détectés (heuristique)
     endpoints = detect_simple_endpoints(repo_files)
     if not endpoints and "GET /v1/health" in readme:
         endpoints.append("GET /v1/health")
@@ -112,7 +99,6 @@ def main() -> None:
     else:
         endpoints_md = "_Aucun détecté (voir README/api)._"
 
-    # Infos CI (liens utiles si exécuté dans GitHub Actions)
     run_link = ""
     server = os.getenv("GITHUB_SERVER_URL")
     repo = os.getenv("GITHUB_REPOSITORY")
@@ -139,9 +125,9 @@ def main() -> None:
 
 ## Endpoints détectés (heuristique)
 {endpoints_md}
- 
+
 ## MVP Musts Snapshot
-{chr(10).join(f"- [ ] {m}" for m in musts)}
+{musts_md}
 
 ## Notes
 - Les Musts sont détectés automatiquement depuis `MVP.md` si présent.
