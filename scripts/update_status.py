@@ -107,12 +107,15 @@ def main() -> None:
         run_link = f"{server}/{repo}/actions/runs/{run_id}"
 
     py_version = sys.version.split()[0]
+    
+    # Fix: Pre-build the CI run part to avoid backslash in f-string
+    ci_run_part = f"  \n**CI Run**: {run_link}" if run_link else ""
 
     status_md = f"""# Project Status — Skillence AI
 
 **Date (UTC)**: {args.date}
 **Commit**: `{args.commit}` — {args.message}
-**Python**: {py_version}{("  \n**CI Run**: " + run_link) if run_link else ""}
+**Python**: {py_version}{ci_run_part}
 
 ## Build & Tests
 - Tests: {tests_status}
