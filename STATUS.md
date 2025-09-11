@@ -1,16 +1,21 @@
 # Project Status — Skillence AI
 
-**Date (UTC)**: 2025-09-11T18:39:44Z
-**Commit**: `304c429` — ci: add GitHub Actions workflow for tests + STATUS.md
+**Date (UTC)**: 2025-09-11T19:23:07Z
+**Commit**: `92c9a05` — delete status.md from gitignore
+**Python**: 3.11.13  
+**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17655065681
 
 ## Build & Tests
-- Tests: ❌ FAIL
+- Tests: ✅ PASS
 
 ## Essentials (MVP)
 - FastAPI present: ✅
 - Health endpoint: ✅
 - SQLite storage present: ✅
 - Tests directory present: ✅
+
+## Endpoints détectés (heuristique)
+- GET /v1/health
 
 ## MVP Musts Snapshot
 - [ ] FastAPI en place avec health check
