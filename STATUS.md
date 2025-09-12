@@ -40,4 +40,8 @@
 ## 🔗 References
 - [README.md](README.md) — Quick Start & API Usage
 - [MVP.md](MVP.md) — MVP scope and constraints  
+<<<<<<< HEAD
 - [skillence_agent_kit.md](skillence_agent_kit.md) — Long-term vision and architecture
+=======
+- [skillence_agent_kit.md](skillence_agent_kit.md) — Long-term vision and architecture
+>>>>>>> 2a01c87ee142ca849c3998174f0e2cb40475f47c
