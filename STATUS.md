@@ -1,15 +1,15 @@
 # Project Status — Skillence AI
 
-**Date (UTC)**: 2025-09-11T19:30:39Z
-**Commit**: `eded871` — update script update_status.py
+**Date (UTC)**: 2025-09-12T12:47:18Z
+**Commit**: `a9c51c8` — update toml en mettant le package agents
 **Python**: 3.11.13  
-**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17655224816
+**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17674894688
 
 ## 📊 Progress Overview
 **Phase**: Development | **MVP Progress**: 60% (3/5)
 
 ## 🔧 Build & Tests
-- Tests: ✅ PASS
+- Tests: ❌ FAIL
 
 ## ⚙️ Essentials (MVP Components)
 - FastAPI present: ✅
@@ -25,12 +25,12 @@
 - [ ] POST /v1/lessons qui génère une leçon complète (plan + texte)
 - [🔄] SQLite pour stocker les leçons
 - [ ] Logs simples (INFO)
-- [🔄] Tests : health + happy path
+- [✅] Tests : health + happy path
 
 ## 🚀 Next Steps (Agent Priority)
 1. **Implémenter storage layer** - SQLAlchemy base + models Lesson
 2. **Créer endpoint POST /v1/lessons** - Route + DTO + orchestration
-3. **Tests e2e lessons** - Happy path + validation + idempotence
+4. **Ajouter logging structuré** - run_id + métriques basiques
 
 ## 📝 Notes
 - **Storage detail**: Structure présente mais fichiers vides
@@ -40,8 +40,4 @@
 ## 🔗 References
 - [README.md](README.md) — Quick Start & API Usage
 - [MVP.md](MVP.md) — MVP scope and constraints  
-<<<<<<< HEAD
 - [skillence_agent_kit.md](skillence_agent_kit.md) — Long-term vision and architecture
-=======
-- [skillence_agent_kit.md](skillence_agent_kit.md) — Long-term vision and architecture
->>>>>>> 2a01c87ee142ca849c3998174f0e2cb40475f47c
