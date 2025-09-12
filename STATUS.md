@@ -1,15 +1,15 @@
 # Project Status — Skillence AI
 
-**Date (UTC)**: 2025-09-12T12:47:18Z
-**Commit**: `a9c51c8` — update toml en mettant le package agents
+**Date (UTC)**: 2025-09-12T12:54:00Z
+**Commit**: `31aa27d` — Merge branch 'main' of https://github.com/mpaquette8/skillence_ai
 **Python**: 3.11.13  
-**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17674894688
+**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17675047999
 
 ## 📊 Progress Overview
 **Phase**: Development | **MVP Progress**: 60% (3/5)
 
 ## 🔧 Build & Tests
-- Tests: ❌ FAIL
+- Tests: ✅ PASS
 
 ## ⚙️ Essentials (MVP Components)
 - FastAPI present: ✅
