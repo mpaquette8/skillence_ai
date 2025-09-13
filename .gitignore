@@ -1,4 +1,124 @@
-.venv/
-__pycache__/
-*.pyc
+# // file: .gitignore
+
+# === Secrets et configuration ===
 .env
+.env.local
+.env.production
+.env.staging
+*.key
+*.pem
+
+# === Base de données ===
+*.db
+*.sqlite
+*.sqlite3
+skillence_ai.db
+test.db
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === Environnements virtuels ===
+.venv/
+.env/
+venv/
+ENV/
+env/
+.venv
+
+# === Tests et coverage ===
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# === IDEs et éditeurs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+*.log
+logs/
+log/
+
+# === Fichiers temporaires ===
+tmp/
+temp/
+*.tmp
+*.temp
+
+# === OS spécifiques ===
+# Windows
+*.lnk
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Linux
+*~
+.nfs*
+
+# === FastAPI / Uvicorn ===
+.uvicorn/
+
+# === Jupyter Notebooks ===
+.ipynb_checkpoints
+
+# === Distribution / packaging ===
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# === mypy ===
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# === Pyre type checker ===
+.pyre/
+
+# === pytype static type analyzer ===
+.pytype/
