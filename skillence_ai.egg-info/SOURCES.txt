@@ -1,5 +1,6 @@
 README.md
 pyproject.toml
+agents/lesson_generator.py
 api/__init__.py
 api/main.py
 skillence_ai.egg-info/PKG-INFO
@@ -10,4 +11,6 @@ skillence_ai.egg-info/top_level.txt
 storage/__init__.py
 storage/base.py
 storage/models.py
+tests/test_api_lessons.py
 tests/test_health.py
+tests/test_storage.py
