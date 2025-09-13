@@ -63,6 +63,30 @@ def generate_lesson(request: LessonRequest) -> LessonContent:
         raise HTTPException(status_code=500, detail="OpenAI API call failed") from exc
 
     try:
+        content = resp.choices[0].message.content
+        if not content or content.strip() == "":
+            raise ValueError("Empty OpenAI response")
+        
+        data = json.loads(content)
+        
+        # Validation des champs requis
+        required = ["title", "objectives", "plan", "content"]
+        missing = [k for k in required if k not in data]
+        if missing:
+            raise ValueError(f"Missing fields: {missing}")
+            
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"OpenAI returned invalid JSON: {str(exc)[:100]}"
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OpenAI response validation failed: {str(exc)}"
+        ) from exc
+
+    try:
         data = json.loads(resp.choices[0].message.content)
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Invalid OpenAI response") from exc
