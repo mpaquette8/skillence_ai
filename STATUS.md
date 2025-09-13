@@ -1,9 +1,9 @@
 # Project Status — Skillence AI
 
-**Date (UTC)**: 2025-09-13T15:29:22Z
-**Commit**: `79b1f16` — Merge branch 'main' of https://github.com/mpaquette8/skillence_ai
+**Date (UTC)**: 2025-09-13T15:53:12Z
+**Commit**: `fb4fcac` — Merge branch 'main' of https://github.com/mpaquette8/skillence_ai
 **Python**: 3.11.13  
-**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17698530408
+**CI Run**: https://github.com/mpaquette8/skillence_ai/actions/runs/17698762960
 
 ## 📊 Progress Overview
 **Phase**: Testing | **MVP Progress**: 80% (4/5)
@@ -24,12 +24,11 @@
 - [✅] FastAPI en place avec health check
 - [ ] POST /v1/lessons qui génère une leçon complète (plan + texte)
 - [✅] SQLite pour stocker les leçons
-- [ ] Logs simples (INFO)
+- [✅] Logs simples (INFO)
 - [✅] Tests : health + happy path
 
 ## 🚀 Next Steps (Agent Priority)
 2. **Créer endpoint POST /v1/lessons** - Route + DTO + orchestration
-4. **Ajouter logging structuré** - run_id + métriques basiques
 
 ## 📝 Notes
 - **Storage detail**: Base et modèles implémentés
