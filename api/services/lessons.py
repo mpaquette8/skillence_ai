@@ -20,6 +20,7 @@ import time  # stdlib — timing pour logs
 from typing import Dict, Optional
 
 from agents.lesson_generator import LessonRequest, LessonContent, generate_lesson
+from agents.formatter import format_lesson
 from storage.base import get_session
 from storage.models import Request, Lesson
 from api.middleware.logging import log_operation  # local — logs avec request_id
@@ -65,6 +66,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
                   subject=request.subject, audience=request.audience)
     
     lesson_content = generate_lesson(request)
+    formatted = format_lesson(lesson_content)
     
     generation_duration = int((time.time() - generation_start) * 1000)
     log_operation("agent_generation_completed", generation_duration,
@@ -88,11 +90,11 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
         db_lesson = Lesson(
             request_id=db_request.id,
             title=lesson_content.title,
-            content_md=lesson_content.content
+            content_md=formatted.markdown
         )
         db_lesson.objectives = lesson_content.objectives
         db_lesson.plan = lesson_content.plan
-        db_lesson.quiz = []
+        db_lesson.quiz = [q.model_dump() for q in formatted.quiz]
         
         db.add(db_lesson)
         db.commit()
@@ -125,7 +127,7 @@ def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
         
         if lesson:
             log_operation("lesson_retrieved", duration, lesson_id=lesson_id[:8])
-            return {
+            formatted = {
                 "id": lesson.id,
                 "title": lesson.title,
                 "content": lesson.content_md,
@@ -134,6 +136,7 @@ def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
                 "quiz": lesson.quiz,
                 "created_at": lesson.created_at.isoformat()
             }
+            return formatted
         else:
             log_operation("lesson_not_found", duration, lesson_id=lesson_id[:8])
             return None

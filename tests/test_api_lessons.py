@@ -14,6 +14,7 @@ Approche pragmatique MVP : moins d'isolation mais plus simple et robuste.
 # - storage.models (local) : Request, Lesson pour vérifications — modèles ORM
 import pytest
 import httpx
+from httpx import ASGITransport
 from api.main import app
 from storage.base import get_session
 from storage.models import Request, Lesson
@@ -37,7 +38,8 @@ async def test_create_lesson_happy_path():
     """
     Test du cycle complet : POST → génération → persistance → réponse.
     """
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
             "subject": "La photosynthese test", 
             "audience": "lyceen", 
@@ -66,9 +68,10 @@ async def test_create_lesson_happy_path():
             lesson = db.query(Lesson).filter(Lesson.id == data["lesson_id"]).first()
             assert lesson is not None
             assert lesson.title == "La photosynthese test (niveau lyceen)"
-            assert len(lesson.content_md) > 50
+            assert lesson.content_md.startswith("#")
             assert len(lesson.objectives) >= 2
             assert len(lesson.plan) >= 3
+            assert len(lesson.quiz) == 5
 
 
 @pytest.mark.asyncio 
@@ -76,7 +79,8 @@ async def test_get_lesson_by_id():
     """
     Test GET /v1/lessons/{id} après création.
     """
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         # Créer une leçon
         create_payload = {"subject": "Test GET unique", "audience": "adulte", "duration": "medium"}
         create_resp = await client.post("/v1/lessons", json=create_payload)
@@ -90,9 +94,10 @@ async def test_get_lesson_by_id():
         data = get_resp.json()
         assert data["id"] == lesson_id
         assert data["title"] == "Test GET unique (niveau adulte)"
-        assert len(data["content"]) > 50
+        assert data["content"].startswith("#")
         assert isinstance(data["objectives"], list)
         assert isinstance(data["plan"], list)
+        assert len(data["quiz"]) == 5
 
 
 @pytest.mark.asyncio
@@ -100,7 +105,8 @@ async def test_idempotence():
     """
     Test idempotence : même requête → même résultat.
     """
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {"subject": "Test idempotence", "audience": "enfant", "duration": "short"}
         
         # Premier appel
@@ -130,7 +136,8 @@ async def test_get_nonexistent_lesson():
     """
     Test GET avec un ID inexistant → 404.
     """
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         fake_id = "nonexistent-id-12345"
         resp = await client.get(f"/v1/lessons/{fake_id}")
         
@@ -143,7 +150,8 @@ async def test_invalid_payload_validation():
     """
     Test validation Pydantic : payload invalide → 422.
     """
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         # Payload avec champs manquants
         invalid_payload = {"subject": "Test"}  # Manque audience et duration
         
@@ -159,7 +167,8 @@ async def test_different_requests_different_lessons():
     """
     Test que des requêtes différentes génèrent des leçons différentes.
     """
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         # Requête 1
         payload1 = {"subject": "Sujet A unique", "audience": "lyceen", "duration": "short"}
         resp1 = await client.post("/v1/lessons", json=payload1)
