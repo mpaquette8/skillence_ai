@@ -12,10 +12,10 @@ pip install -r requirements.txt
 ```
 
 ### Configuration
+Créez un fichier `.env` et ajoutez votre clé :
+
 ```bash
-cp .env.example .env
-# Ajoutez votre clé OpenAI
-OPENAI_API_KEY=sk-...
+echo "OPENAI_API_KEY=sk-..." > .env
 ```
 
 ### Lancer le serveur

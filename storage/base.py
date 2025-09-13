@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # Par défaut : un fichier SQLite local. Pratique pour démarrer sans rien installer.
     DATABASE_URL: str = "sqlite:///./skillence_ai.db"
-    OPENAI_API_KEY: str = ""
+    OPENAI_API_KEY: str | None = None
 
     class Config:
         # On lit un fichier `.env` si présent, pour surcharger cette valeur
