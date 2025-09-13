@@ -1,30 +1,36 @@
 # // file: skillence_ai/storage/base.py
 """
 Base et bootstrap SQLAlchemy (MVP v0.1, SQLite sync).
-- Fournit: engine, SessionLocal (context manager), Base (declarative), init_db()
-- Config via pydantic-settings (DATABASE_URL), défaut SQLite local.
+Ici on prépare tout ce qui est nécessaire pour parler avec la base de données.
+- On configure l’adresse de la base (par défaut SQLite local).
+- On définit la "Base" pour créer nos tables.
+- On fabrique un moteur (engine) qui sait ouvrir/fermer la DB.
+- On crée une "Session" (carnet temporaire) pour lire/écrire dans la DB.
+- On ajoute un helper init_db() pour créer les tables si elles n’existent pas.
 """
 
 # Inventaire des dépendances
-# - pydantic_settings (tierce) : gestion de config 12-factor (.env) — alternative: os.getenv + dataclass
-# - sqlalchemy (tierce) : ORM 2.x, engine sync — alternative async: aiosqlite + SQLAlchemy async (v0.2+)
-# - sqlalchemy.orm (tierce) : base déclarative & session
-# - contextlib (stdlib) : contextmanager pour encapsuler la session
-# - typing (stdlib) : annotations de types
-from pydantic_settings import BaseSettings  # tierce — configuration via variables d'environnement
-from sqlalchemy import create_engine  # tierce — fabrique de moteur DB (sync)
-from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session  # tierce — ORM 2.x
-from contextlib import contextmanager  # stdlib — gestion contextuelle de la session
-from typing import Iterator  # stdlib — type pour générateur
+# - pydantic_settings (tierce) : permet de charger la config depuis .env (plus pratique que coder en dur)
+# - sqlalchemy (tierce) : outil pour parler à la base (ici SQLite) de manière haut niveau
+# - sqlalchemy.orm (tierce) : partie ORM qui gère les tables comme des classes Python
+# - contextlib (stdlib) : permet de créer un "with ... as ..." pour ouvrir/fermer automatiquement une session
+# - typing (stdlib) : donne le type Iterator (utile pour dire qu’on retourne un générateur de sessions)
+
+from pydantic_settings import BaseSettings  # charge la config depuis les variables d'environnement (.env)
+from sqlalchemy import create_engine  # crée le "moteur" pour se connecter à la DB
+from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session  # outils ORM pour gérer classes/tables et sessions
+from contextlib import contextmanager  # permet d’écrire un contexte "with"
+from typing import Iterator  # sert juste à dire qu’on retourne un générateur de sessions
 
 
 class Settings(BaseSettings):
-    """Paramètres d'application (DB, etc.)."""
+    """Paramètres d'application (notamment la connexion DB)."""
 
-    DATABASE_URL: str = "sqlite:///./skillence_ai.db"  # défaut local (sync)
-    # Note: pas de secrets en dur (OpenAI key etc. dans .env à part)
+    # Par défaut : un fichier SQLite local. Pratique pour démarrer sans rien installer.
+    DATABASE_URL: str = "sqlite:///./skillence_ai.db"
 
     class Config:
+        # On lit un fichier `.env` si présent, pour surcharger cette valeur
         env_file = ".env"
         env_file_encoding = "utf-8"
 
@@ -33,42 +39,51 @@ settings = Settings()
 
 
 class Base(DeclarativeBase):
-    """Base déclarative SQLAlchemy (ORM 2.x)."""
-
+    """Classe de base pour déclarer nos tables.
+    Exemple : chaque modèle (Lesson, Request, etc.) héritera de cette classe.
+    """
     pass
 
 
-# Engine sync (SQLite fichier). echo=False par défaut (logs SQL désactivés en prod).
+# Le "moteur" qui ouvre une connexion vers la DB (ici SQLite en mode fichier local).
+# echo=False → pas de logs SQL dans la console (plus propre en prod).
 engine = create_engine(settings.DATABASE_URL, future=True)
 
 
-# Session factory (autocommit=False, autoflush=False pour contrôle explicite).
+# Fabrique de sessions : une session = un petit carnet temporaire pour lire/écrire.
+# autoflush/autocommit désactivés → on contrôle nous-mêmes quand on enregistre.
 SessionLocal = sessionmaker(bind=engine, class_=Session, autoflush=False, autocommit=False, future=True)
 
 
 @contextmanager
 def get_session() -> Iterator[Session]:
     """
-    Contexte de session DB.
-    Usage:
+    Donne une session prête à l'emploi sous forme de contexte.
+    Exemple d’usage :
         with get_session() as db:
+            db.add(objet)
             ...
+    Avantages : la session est toujours correctement fermée,
+    et si une erreur arrive → rollback automatique.
     """
     db = SessionLocal()
     try:
         yield db
         db.commit()
     except Exception:
-        db.rollback()
+        db.rollback()  # si erreur → on annule ce qu’on a commencé
         raise
     finally:
-        db.close()
+        db.close()  # fermeture propre, sinon fuite de connexion
 
 
 def init_db() -> None:
-    """Crée les tables si absentes (MVP v0.1 — Alembic plus tard)."""
-    # Import tardif pour éviter import cycles
-    from . import models as _models
+    """
+    Crée les tables définies dans models.py si elles n’existent pas encore.
+    Utile au démarrage du projet (MVP v0.1).
+    Plus tard, on utilisera Alembic pour les migrations versionnées.
+    """
+    from . import models as _models  # import tardif pour éviter un cycle d’import
 
-    _ = _models  # satisfare l'analyseur statique (référence utilisée)
+    _ = _models  # juste pour signaler à l’éditeur/linter que c’est bien utilisé
     Base.metadata.create_all(bind=engine)
