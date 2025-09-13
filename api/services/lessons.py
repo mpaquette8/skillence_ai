@@ -1,87 +1,80 @@
 # // file: api/services/lessons.py
 
 """
-Service d'orchestration : agent lesson_generator + persistance SQLite.
-
-Rôle :
-- Recevoir une demande de leçon (LessonRequest)
-- Appeler l'agent lesson_generator 
-- Persister en base (Request + Lesson)
-- Retourner les données pour la réponse API
-
-Pourquoi un service séparé :
-- Découple la logique métier des routes FastAPI
-- Facilite les tests unitaires 
-- Prépare l'évolution vers multi-agents (v0.2)
+Service d'orchestration avec logs intégrés.
+Trace les opérations agent + persistance pour debugging et monitoring.
 """
 
 # Inventaire des dépendances
-# - hashlib (stdlib) : hash SHA-256 pour idempotence — alternative: uuid mais moins prévisible
-# - json (stdlib) : sérialisation pour hash stable — alternative: pickle mais non portable
-# - typing (stdlib) : annotations de types (Dict, Optional)
+# - hashlib (stdlib) : hash SHA-256 pour idempotence 
+# - json (stdlib) : sérialisation stable pour hash
+# - time (stdlib) : mesure des durées — nécessaire pour logs de performance
+# - typing (stdlib) : annotations de types
 # - agents.lesson_generator (local) : DTOs + logique de génération
-# - storage.base (local) : session DB + init
-# - storage.models (local) : ORM Request/Lesson
-import hashlib  # stdlib — hash pour idempotence
-import json  # stdlib — sérialisation stable
-from typing import Dict, Optional  # stdlib — typing
+# - storage.base (local) : session DB
+# - storage.models (local) : ORM Request/Lesson  
+# - api.middleware.logging (local) : helper de logs contextualisé
+import hashlib
+import json
+import time  # stdlib — timing pour logs
+from typing import Dict, Optional
 
-from agents.lesson_generator import LessonRequest, LessonContent, generate_lesson  # local — agent
-from storage.base import get_session  # local — session DB
-from storage.models import Request, Lesson  # local — ORM
+from agents.lesson_generator import LessonRequest, LessonContent, generate_lesson
+from storage.base import get_session
+from storage.models import Request, Lesson
+from api.middleware.logging import log_operation  # local — logs avec request_id
 
 
 def _compute_request_hash(request: LessonRequest) -> str:
-    """
-    Calcule un hash SHA-256 stable pour l'idempotence.
-    
-    Permet d'éviter de regénérer la même leçon plusieurs fois.
-    Le hash est basé sur subject+audience+duration (ordre stable via sorted).
-    """
-    # Dictionnaire ordonné pour hash stable
+    """Calcule un hash SHA-256 stable pour l'idempotence."""
     data = {
         "subject": request.subject.strip().lower(),
         "audience": request.audience.strip().lower(), 
         "duration": request.duration.strip().lower()
     }
     
-    # JSON stable (clés triées) -> bytes -> hash
     json_bytes = json.dumps(data, sort_keys=True, ensure_ascii=False).encode('utf-8')
     return hashlib.sha256(json_bytes).hexdigest()
 
 
 def create_lesson(request: LessonRequest) -> Dict[str, str]:
     """
-    Orchestre : génération -> persistance -> réponse.
-    
-    Returns:
-        Dict avec lesson_id et title (pour réponse API)
-        
-    Raises:
-        Exception: si génération ou persistance échouent
+    Orchestre génération + persistance avec logs détaillés.
     """
+    start_time = time.time()
     
-    # 1. Calcul hash pour idempotence (optionnel en v0.1)
+    # 1. Calcul hash + vérification cache
     request_hash = _compute_request_hash(request)
+    log_operation("idempotence_check", hash=request_hash[:8])
     
-    # 2. Vérifier si déjà traité (idempotence basique)
     with get_session() as db:
         existing = db.query(Request).filter(Request.input_hash == request_hash).first()
         if existing and existing.lessons:
-            # Retourner la leçon existante
-            existing_lesson = existing.lessons[0]  # Première leçon associée
+            cache_duration = int((time.time() - start_time) * 1000)
+            log_operation("lesson_from_cache", cache_duration, 
+                         lesson_id=existing.lessons[0].id[:8])
             return {
-                "lesson_id": existing_lesson.id,
-                "title": existing_lesson.title,
+                "lesson_id": existing.lessons[0].id,
+                "title": existing.lessons[0].title,
                 "from_cache": True
             }
     
-    # 3. Générer le contenu via l'agent
+    # 2. Génération de contenu
+    generation_start = time.time()
+    log_operation("agent_generation_started", 
+                  subject=request.subject, audience=request.audience)
+    
     lesson_content = generate_lesson(request)
     
-    # 4. Persister Request + Lesson
+    generation_duration = int((time.time() - generation_start) * 1000)
+    log_operation("agent_generation_completed", generation_duration,
+                  content_length=len(lesson_content.content))
+    
+    # 3. Persistance en base
+    persistence_start = time.time()
+    
     with get_session() as db:
-        # Créer l'entrée Request
+        # Créer Request
         db_request = Request(
             subject=request.subject,
             audience=request.audience, 
@@ -89,22 +82,28 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
             input_hash=request_hash
         )
         db.add(db_request)
-        db.flush()  # Pour avoir db_request.id
+        db.flush()
         
-        # Créer l'entrée Lesson liée
+        # Créer Lesson
         db_lesson = Lesson(
             request_id=db_request.id,
             title=lesson_content.title,
-            content_md=lesson_content.content  # Le contenu principal
+            content_md=lesson_content.content
         )
-        
-        # Utiliser les propriétés JSON pour objectives/plan
         db_lesson.objectives = lesson_content.objectives
         db_lesson.plan = lesson_content.plan
-        db_lesson.quiz = []  # Quiz vide pour v0.1 (ajouté plus tard)
+        db_lesson.quiz = []
         
         db.add(db_lesson)
         db.commit()
+        
+        persistence_duration = int((time.time() - persistence_start) * 1000)
+        total_duration = int((time.time() - start_time) * 1000)
+        
+        log_operation("lesson_persisted", persistence_duration,
+                      lesson_id=db_lesson.id[:8])
+        log_operation("lesson_creation_completed", total_duration,
+                      from_cache=False)
         
         return {
             "lesson_id": db_lesson.id,
@@ -115,22 +114,26 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
 
 def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
     """
-    Récupère une leçon par son ID.
-    
-    Returns:
-        Dict avec toutes les données de la leçon, ou None si non trouvée
+    Récupère une leçon avec log simple.
     """
+    start_time = time.time()
+    
     with get_session() as db:
         lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
-        if not lesson:
+        
+        duration = int((time.time() - start_time) * 1000)
+        
+        if lesson:
+            log_operation("lesson_retrieved", duration, lesson_id=lesson_id[:8])
+            return {
+                "id": lesson.id,
+                "title": lesson.title,
+                "content": lesson.content_md,
+                "objectives": lesson.objectives,
+                "plan": lesson.plan,
+                "quiz": lesson.quiz,
+                "created_at": lesson.created_at.isoformat()
+            }
+        else:
+            log_operation("lesson_not_found", duration, lesson_id=lesson_id[:8])
             return None
-            
-        return {
-            "id": lesson.id,
-            "title": lesson.title,
-            "content": lesson.content_md,
-            "objectives": lesson.objectives,
-            "plan": lesson.plan,
-            "quiz": lesson.quiz,
-            "created_at": lesson.created_at.isoformat()
-        }

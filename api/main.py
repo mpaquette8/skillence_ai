@@ -1,32 +1,39 @@
 # // file: api/main.py
 
 """
-Application FastAPI complète (MVP v0.1).
-Expose:
-- GET /v1/health : ping
-- POST /v1/lessons : génère une leçon + persiste en base
-- GET /v1/lessons/{id} : récupère une leçon existante
-
-Contraintes:
-- Pydantic v2 pour I/O
-- Initialisation automatique de la base SQLite
-- Service d'orchestration pour découpler logique métier
+Application FastAPI complète avec système de logs (MVP v0.1).
+Intègre le middleware de correlation ID pour traçabilité.
 """
 
 # Inventaire des dépendances
-# - fastapi (tierce) : framework ASGI + HTTPException — alternative: Starlette mais moins d'outils
-# - pydantic (tierce) : modèles de réponse API — validation automatique des entrées/sorties
-# - typing (stdlib) : annotations de types (Dict, Optional)
-# - agents.lesson_generator (local) : DTO d'entrée LessonRequest
-# - api.services.lessons (local) : orchestration create_lesson + get_lesson_by_id
-# - storage.base (local) : init_db pour créer les tables au démarrage
-from fastapi import FastAPI, HTTPException  # tierce — serveur web + gestion d'erreurs
-from pydantic import BaseModel  # tierce — modèle de réponse
-from typing import Dict, Optional  # stdlib — typing
+# - fastapi (tierce) : framework ASGI + HTTPException — serveur principal
+# - pydantic (tierce) : modèles de réponse API — validation I/O
+# - typing (stdlib) : annotations de types — améliore lisibilité
+# - logging (stdlib) : configuration des logs — système de logging
+# - agents.lesson_generator (local) : DTO d'entrée — modèle de requête
+# - api.services.lessons (local) : orchestration métier — logique principale  
+# - api.middleware.logging (local) : middleware de logs — corrélation requêtes
+# - storage.base (local) : initialisation DB — setup base de données
+import logging  # stdlib — configuration logging
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Dict, Optional
 
-from agents.lesson_generator import LessonRequest  # local — DTO d'entrée
-from api.services.lessons import create_lesson, get_lesson_by_id  # local — orchestration
-from storage.base import init_db  # local — initialisation DB
+from agents.lesson_generator import LessonRequest
+from api.services.lessons import create_lesson, get_lesson_by_id
+from api.middleware.logging import LoggingMiddleware
+from storage.base import init_db
+
+
+# Configuration des logs (format simple pour MVP)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Logger pour l'application principale
+logger = logging.getLogger("skillence_ai.main")
 
 
 # Modèles de réponse API (Pydantic v2)
@@ -49,21 +56,26 @@ class LessonDetailResponse(BaseModel):
     created_at: str
 
 
-# Application FastAPI
+# Application FastAPI avec middleware de logs
 app = FastAPI(
     title="Skillence AI — MVP", 
     version="0.1.0",
     description="API de génération de leçons pédagogiques vulgarisées"
 )
 
+# Ajouter le middleware de logging (important: avant les routes)
+app.add_middleware(LoggingMiddleware)
+
 
 @app.on_event("startup")
 def startup_event() -> None:
     """
-    Initialise la base de données au démarrage.
-    Crée les tables SQLite si elles n'existent pas.
+    Initialise l'application au démarrage.
+    Logs + DB initialization.
     """
+    logger.info("Skillence AI starting up...")
     init_db()
+    logger.info("Database initialized - ready to serve requests")
 
 
 @app.get("/v1/health")
@@ -76,20 +88,9 @@ def health() -> Dict[str, str]:
 def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
     """
     Crée une leçon (plan + contenu) à partir d'un sujet/audience/durée.
-    
-    - Génère le contenu via l'agent lesson_generator
-    - Persiste en base SQLite (tables requests + lessons)
-    - Gère l'idempotence basique (même input = même résultat)
-    
-    Returns:
-        LessonResponse avec lesson_id pour récupération ultérieure
-        
-    Raises:
-        HTTPException 400: si validation Pydantic échoue
-        HTTPException 500: si génération ou persistance échouent
+    Logs intégrés pour traçabilité complète du processus.
     """
     try:
-        # Validation déjà assurée par Pydantic via `payload`
         result = create_lesson(payload)
         
         return LessonResponse(
@@ -100,7 +101,7 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
         )
         
     except Exception as exc:
-        # En MVP : erreur 500 simple avec message (plus tard: logs structurés + run_id)
+        logger.error(f"Lesson creation failed: {str(exc)}")
         raise HTTPException(
             status_code=500, 
             detail=f"Échec de génération de leçon: {str(exc)}"
@@ -111,16 +112,6 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
 def get_lesson_endpoint(lesson_id: str) -> LessonDetailResponse:
     """
     Récupère une leçon existante par son ID.
-    
-    Args:
-        lesson_id: UUID de la leçon (généré lors de la création)
-        
-    Returns:
-        LessonDetailResponse avec contenu complet (markdown + métadonnées)
-        
-    Raises:
-        HTTPException 404: si lesson_id n'existe pas
-        HTTPException 500: si erreur de base de données
     """
     try:
         lesson_data = get_lesson_by_id(lesson_id)
@@ -134,10 +125,9 @@ def get_lesson_endpoint(lesson_id: str) -> LessonDetailResponse:
         return LessonDetailResponse(**lesson_data)
         
     except HTTPException:
-        # Re-raise les HTTPException (404) sans les wrapper
         raise
     except Exception as exc:
-        # Erreurs inattendues (DB, etc.)
+        logger.error(f"Lesson retrieval failed for {lesson_id}: {str(exc)}")
         raise HTTPException(
             status_code=500,
             detail=f"Erreur lors de la récupération: {str(exc)}"
