@@ -4,6 +4,10 @@
 Tests d'intégration simplifiés pour les endpoints /v1/lessons.
 Utilise la DB principale (skillence_ai.db) avec nettoyage avant chaque test.
 Approche pragmatique MVP : moins d'isolation mais plus simple et robuste.
+
+CORRECTIFS v0.1.1:
+- Utilisation des enum strictes ("lycéen" avec accent)
+- Validation des nouvelles contraintes de validation
 """
 
 # Inventaire des dépendances
@@ -42,7 +46,7 @@ async def test_create_lesson_happy_path():
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
             "subject": "La photosynthese test", 
-            "audience": "lyceen", 
+            "audience": "lycéen",  # CORRECTIF: avec accent
             "duration": "short"
         }
         
@@ -54,7 +58,7 @@ async def test_create_lesson_happy_path():
         
         assert "lesson_id" in data
         assert len(data["lesson_id"]) == 36  # UUID format
-        assert data["title"] == "La photosynthese test (niveau lyceen)"
+        assert data["title"] == "La photosynthese test (niveau lycéen)"
         assert data["message"] == "Leçon générée avec succès"
         assert data["from_cache"] is False  # Première génération
         
@@ -62,12 +66,12 @@ async def test_create_lesson_happy_path():
         with get_session() as db:
             request = db.query(Request).filter(Request.subject == "La photosynthese test").first()
             assert request is not None
-            assert request.audience == "lyceen"
+            assert request.audience == "lycéen"
             assert request.duration == "short"
             
             lesson = db.query(Lesson).filter(Lesson.id == data["lesson_id"]).first()
             assert lesson is not None
-            assert lesson.title == "La photosynthese test (niveau lyceen)"
+            assert lesson.title == "La photosynthese test (niveau lycéen)"
             assert lesson.content_md.startswith("#")
             assert len(lesson.objectives) >= 2
             assert len(lesson.plan) >= 3
@@ -163,6 +167,48 @@ async def test_invalid_payload_validation():
 
 
 @pytest.mark.asyncio
+async def test_strict_enum_validation():
+    """
+    Test validation stricte des enum audience/duration.
+    """
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        
+        # Test audience invalide
+        invalid_audience_payload = {
+            "subject": "Test enum", 
+            "audience": "lyceen",  # Sans accent = invalide
+            "duration": "short"
+        }
+        resp = await client.post("/v1/lessons", json=invalid_audience_payload)
+        assert resp.status_code == 422
+        error = resp.json()["detail"][0]
+        assert "literal_error" in error["type"]
+        assert "enfant" in error["msg"] and "lycéen" in error["msg"]
+        
+        # Test duration invalide
+        invalid_duration_payload = {
+            "subject": "Test enum",
+            "audience": "adulte", 
+            "duration": "fast"  # Invalide
+        }
+        resp = await client.post("/v1/lessons", json=invalid_duration_payload)
+        assert resp.status_code == 422
+        error = resp.json()["detail"][0]
+        assert "literal_error" in error["type"]
+        assert "short" in error["msg"] and "medium" in error["msg"]
+        
+        # Test avec enum valides
+        valid_payload = {
+            "subject": "Test enum valide",
+            "audience": "lycéen", 
+            "duration": "medium"
+        }
+        resp = await client.post("/v1/lessons", json=valid_payload)
+        assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_different_requests_different_lessons():
     """
     Test que des requêtes différentes génèrent des leçons différentes.
@@ -170,13 +216,13 @@ async def test_different_requests_different_lessons():
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         # Requête 1
-        payload1 = {"subject": "Sujet A unique", "audience": "lyceen", "duration": "short"}
+        payload1 = {"subject": "Sujet A unique", "audience": "lycéen", "duration": "short"}
         resp1 = await client.post("/v1/lessons", json=payload1)
         assert resp1.status_code == 200
         lesson_id_1 = resp1.json()["lesson_id"]
         
         # Requête 2 (différente)
-        payload2 = {"subject": "Sujet B unique", "audience": "lyceen", "duration": "short"} 
+        payload2 = {"subject": "Sujet B unique", "audience": "lycéen", "duration": "short"} 
         resp2 = await client.post("/v1/lessons", json=payload2)
         assert resp2.status_code == 200
         lesson_id_2 = resp2.json()["lesson_id"]
@@ -190,3 +236,37 @@ async def test_different_requests_different_lessons():
             lessons_b = db.query(Lesson).filter(Lesson.title.contains("Sujet B unique")).count()
             assert lessons_a == 1
             assert lessons_b == 1
+
+
+@pytest.mark.asyncio
+async def test_all_valid_enum_combinations():
+    """
+    Test toutes les combinaisons valides d'audience/duration.
+    """
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        
+        valid_combinations = [
+            ("enfant", "short"),
+            ("enfant", "medium"), 
+            ("enfant", "long"),
+            ("lycéen", "short"),
+            ("lycéen", "medium"),
+            ("lycéen", "long"),
+            ("adulte", "short"),
+            ("adulte", "medium"),
+            ("adulte", "long")
+        ]
+        
+        for i, (audience, duration) in enumerate(valid_combinations):
+            payload = {
+                "subject": f"Test combinaison {i+1}",
+                "audience": audience,
+                "duration": duration
+            }
+            resp = await client.post("/v1/lessons", json=payload)
+            assert resp.status_code == 200, f"Failed for {audience}/{duration}: {resp.text}"
+            
+            data = resp.json()
+            expected_title = f"Test combinaison {i+1} (niveau {audience})"
+            assert data["title"] == expected_title
