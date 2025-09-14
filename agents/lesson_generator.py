@@ -1,16 +1,17 @@
 # // file: agents/lesson_generator.py
 
 """
-Agent 'lesson_generator' — génération via API OpenAI (NETTOYÉ v0.1.2).
+Agent 'lesson_generator' avec BUDGET TOKENS strict (v0.1.3).
 
-NETTOYAGE v0.1.2:
-- Suppression complète du quiz (reporté v0.2)  
-- Focus sur l'excellence du contenu explicatif
-- Simplification du modèle LessonRequest
+AJOUT v0.1.3:
+- Validation budget 2000 tokens AVANT appel OpenAI
+- Contrôle coûts + prevention timeouts
+- Messages d'erreur pédagogiques pour l'utilisateur
 
 Contraintes MVP :
-- Python 3.11+, Pydantic v2.
-- Max 2000 tokens, timeout 15s.
+- Python 3.11+, Pydantic v2
+- BUDGET STRICT: 1800 tokens prompt + 200 tokens réponse = 2000 total
+- Timeout 15s maintenu
 """
 
 # Inventaire des dépendances
@@ -19,6 +20,7 @@ Contraintes MVP :
 # - fastapi (tierce) : HTTPException pour les erreurs API — standard FastAPI
 # - openai (tierce) : client OpenAI officiel — alternative: requests mais moins pratique
 # - pydantic (tierce) : modèles de validation v2 — alternative: dataclasses mais validation manuelle
+# - .token_utils (local) : validation budget — contrôle coûts MVP critique
 from typing import List, Literal
 import json
 
@@ -26,6 +28,7 @@ from fastapi import HTTPException
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from storage.base import settings
+from .token_utils import validate_prompt_budget
 
 # Client OpenAI avec timeout configuré
 client = OpenAI(
@@ -58,8 +61,9 @@ class LessonContent(BaseModel):
 
 def generate_lesson(request: LessonRequest) -> LessonContent:
     """
-    Génère une leçon de qualité via l'API OpenAI.
+    Génère une leçon de qualité via l'API OpenAI avec CONTRÔLE BUDGET.
     
+    NOUVEAU v0.1.3: Validation stricte 1800 tokens prompt avant appel API.
     Focus v0.1: Excellence du contenu explicatif (sans quiz).
     """
     # Construction du prompt focalisé sur la qualité explicative
@@ -79,12 +83,19 @@ def generate_lesson(request: LessonRequest) -> LessonContent:
         "}"
     )
     
+    # NOUVEAU: Validation budget AVANT appel OpenAI (évite coûts + timeouts)
+    validate_prompt_budget(prompt, {
+        "subject": request.subject,
+        "audience": request.audience,
+        "duration": request.duration
+    })
+    
     # Appel OpenAI avec gestion d'erreurs spécifiques
     try:
         resp = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000,  # Limite MVP respectée
+            max_tokens=200,  # Limite réponse (le prompt est déjà validé)
             temperature=0.3
         )
         

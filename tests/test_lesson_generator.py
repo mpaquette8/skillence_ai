@@ -73,7 +73,7 @@ def test_generate_lesson_success_single_parsing(mock_client):
     mock_client.chat.completions.create.assert_called_once()
     call_args = mock_client.chat.completions.create.call_args
     assert call_args[1]["model"] == "gpt-3.5-turbo"
-    assert call_args[1]["max_tokens"] == 2000  # Limite MVP
+    assert call_args[1]["max_tokens"] == 200  # Limite MVP
     assert call_args[1]["temperature"] == 0.3
 
 
