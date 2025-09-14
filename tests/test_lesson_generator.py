@@ -12,11 +12,13 @@ NETTOYAGE:
 # - unittest.mock (stdlib) : mocking des appels externes — alternative: monkeypatch mais moins expressif
 # - json (stdlib) : construction réponses mock JSON
 # - fastapi (tierce) : HTTPException pour vérifications erreurs
+# - pydantic (tierce) : ValidationError pour vérifier les contraintes — alternative: ValueError générique
 # - agents.lesson_generator (local) : module à tester
 import pytest
 from unittest.mock import Mock, patch
 import json
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from agents.lesson_generator import LessonRequest, generate_lesson, LessonContent
 
@@ -41,6 +43,14 @@ def test_lesson_request_validation_strict_enums():
     # Invalid duration  
     with pytest.raises(ValueError, match="Input should be 'short', 'medium' or 'long'"):
         LessonRequest(subject="Test", audience="enfant", duration="invalid")
+
+
+def test_lesson_request_subject_max_length():
+    """Test erreur si le sujet dépasse 200 caractères."""
+
+    long_subject = "a" * 201
+    with pytest.raises(ValidationError, match="at most 200 characters"):
+        LessonRequest(subject=long_subject, audience="enfant", duration="short")
 
 
 @patch('agents.lesson_generator.client')
