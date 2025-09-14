@@ -159,10 +159,10 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
 
 def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
     """
-    Récupère une leçon par ID (sans quiz).
+    Récupère une leçon par ID (sans quiz) et résume sa lisibilité.
     """
     start_time = time.time()
-    
+
     with get_session() as db:
         lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
         
@@ -170,6 +170,20 @@ def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
         
         if lesson:
             log_operation("lesson_retrieved", duration, lesson_id=lesson_id[:8])
+
+            # Analyse lisibilité de la leçon récupérée
+            readability_score = validate_readability_for_audience(
+                lesson.content_md,
+                lesson.request.audience,
+            )
+            readability_summary = get_readability_summary(readability_score)
+            if not readability_score.is_valid_for_audience:
+                logger.warning(
+                    f"[REQUEST {get_request_id()}] readability_warning - "
+                    f"lesson_id={lesson_id[:8]}, audience={lesson.request.audience}, "
+                    f"score={readability_score.flesch_kincaid:.1f}"
+                )
+
             formatted = {
                 "id": lesson.id,
                 "title": lesson.title,
@@ -177,7 +191,8 @@ def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
                 "objectives": lesson.objectives,
                 "plan": lesson.plan,
                 # SUPPRIMÉ: "quiz": lesson.quiz,
-                "created_at": lesson.created_at.isoformat()
+                "created_at": lesson.created_at.isoformat(),
+                "quality": {"readability": readability_summary},
             }
             return formatted
         else:

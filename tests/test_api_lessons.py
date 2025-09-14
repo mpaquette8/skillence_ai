@@ -100,6 +100,34 @@ async def test_create_lesson_happy_path_isolated(test_app_with_isolated_db):
         assert isinstance(
             data["quality"]["readability"]["is_appropriate_for_audience"], bool
         )
+
+
+@pytest.mark.asyncio
+async def test_get_lesson_includes_quality_metrics(test_app_with_isolated_db):
+    """Récupération d'une leçon avec métriques de lisibilité."""
+    transport = ASGITransport(app=test_app_with_isolated_db)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {
+            "subject": "Test GET qualité",
+            "audience": "lycéen",
+            "duration": "short",
+        }
+
+        create_resp = await client.post("/v1/lessons", json=payload)
+        lesson_id = create_resp.json()["lesson_id"]
+
+        get_resp = await client.get(f"/v1/lessons/{lesson_id}")
+
+        assert get_resp.status_code == 200
+        data = get_resp.json()
+        assert data["id"] == lesson_id
+        assert "quality" in data
+        assert "readability" in data["quality"]
+        assert data["quality"]["readability"]["audience_target"] == "lycéen"
+        assert isinstance(
+            data["quality"]["readability"]["is_appropriate_for_audience"], bool
+        )
         
 
 @pytest.mark.asyncio
