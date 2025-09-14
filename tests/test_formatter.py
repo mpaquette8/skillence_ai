@@ -42,6 +42,9 @@ def test_format_lesson_creates_structured_markdown():
     
     # Vérifications modèle
     assert formatted.title == "La photosynthèse expliquée"
+    assert isinstance(formatted.readability, dict)
+    assert formatted.readability["audience_target"] == "lycéen"
+    assert "flesch_kincaid_score" in formatted.readability
     
     # SUPPRIMÉ: Vérifications quiz
 
@@ -66,3 +69,7 @@ def test_format_lesson_handles_minimal_content():
     assert "1. Section A" in formatted.markdown
     assert "2. Section B" in formatted.markdown
     assert "Contenu court." in formatted.markdown
+
+    # Lisibilité disponible même pour contenu minimal
+    assert isinstance(formatted.readability, dict)
+    assert "readability_level" in formatted.readability

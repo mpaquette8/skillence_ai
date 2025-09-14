@@ -10,14 +10,20 @@ NETTOYAGE v0.1.2:
 # Inventaire des dépendances
 # - pydantic (tierce) : modèles de validation v2 — BaseModel pour structure
 # - agents.lesson_generator (local) : DTO d'entrée LessonContent — contenu à formater
+# - agents.quality_utils (local) : validation et résumé lisibilité
 from pydantic import BaseModel
 from .lesson_generator import LessonContent
+from .quality_utils import (
+    validate_readability_for_audience,
+    get_readability_summary,
+)
 
 
 class LessonFormatted(BaseModel):
     """Résultat final du formatter (SIMPLIFIÉ - sans quiz)."""
     title: str
     markdown: str
+    readability: dict
     # SUPPRIMÉ: quiz field
 
 
@@ -56,8 +62,13 @@ def format_lesson(content: LessonContent) -> LessonFormatted:
         Markdown formaté prêt à l'export
     """
     markdown = _build_markdown(content)
-    
+
+    # Analyse de lisibilité pour audience par défaut 'lycéen'
+    score = validate_readability_for_audience(markdown, "lycéen")
+    readability = get_readability_summary(score)
+
     return LessonFormatted(
-        title=content.title, 
-        markdown=markdown
+        title=content.title,
+        markdown=markdown,
+        readability=readability,
     )
