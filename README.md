@@ -231,7 +231,6 @@ python --version
 skillence_ai/
 ├── api/
 │   ├── main.py              # Application FastAPI
-│   ├── routes/health.py     # Health check
 │   ├── services/lessons.py  # Orchestration métier
 │   └── middleware/logging.py # Logs + correlation ID
 ├── agents/

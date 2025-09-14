@@ -167,7 +167,7 @@ Processus :
 ### 1) Initialisation projet (Code Mode)
 ```bash
 # Demande à l’agent :
-Génère les fichiers de bootstrap du repo `skillence_ai` : pyproject.toml (poetry/uv), api/main.py (FastAPI), api/routes/health.py, storage/base.py (SQLAlchemy + session), storage/models.py (schemas init), storage/migrations/env.py ((migrations Alembic prévues plus tard, non utilisées en v0.1)), ops/docker-compose.yml (redis), tests/test_health.py. Utilise les règles de ce fichier.
+Génère les fichiers de bootstrap du repo `skillence_ai` : pyproject.toml (poetry/uv), api/main.py (FastAPI), storage/base.py (SQLAlchemy + session), storage/models.py (schemas init), storage/migrations/env.py ((migrations Alembic prévues plus tard, non utilisées en v0.1)), ops/docker-compose.yml (redis), tests/test_health.py. Utilise les règles de ce fichier.
 ```
 
 ### 2) Endpoint MVP (Code Mode)
