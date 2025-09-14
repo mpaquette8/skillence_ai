@@ -66,7 +66,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
                   subject=request.subject, audience=request.audience)
     
     lesson_content = generate_lesson(request)
-    formatted = format_lesson(lesson_content)
+    formatted = format_lesson(lesson_content, include_quiz=request.include_quiz)
     
     generation_duration = int((time.time() - generation_start) * 1000)
     log_operation("agent_generation_completed", generation_duration,

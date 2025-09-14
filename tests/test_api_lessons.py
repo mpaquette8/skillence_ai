@@ -46,7 +46,7 @@ async def test_create_lesson_happy_path():
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
             "subject": "La photosynthese test", 
-            "audience": "lycéen",  # CORRECTIF: avec accent
+            "audience": "lycéen",
             "duration": "short"
         }
         

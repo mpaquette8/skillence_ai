@@ -67,10 +67,24 @@ def _generate_quiz(content: LessonContent) -> List[QuizItem]:
     return quiz
 
 
-def format_lesson(content: LessonContent) -> LessonFormatted:
+def format_lesson(content: LessonContent, include_quiz: bool = True) -> LessonFormatted:
     """
-    Construit le Markdown final et un quiz déterministe.
+    Construit le Markdown final et un quiz optionnel.
+    
+    Args:
+        content: Contenu généré par lesson_generator
+        include_quiz: Si False, retourne quiz vide []
     """
     markdown = _build_markdown(content)
-    quiz = _generate_quiz(content)
-    return LessonFormatted(title=content.title, markdown=markdown, quiz=quiz)
+    
+    # Quiz conditionnel
+    if include_quiz:
+        quiz = _generate_quiz(content)
+    else:
+        quiz = []  # Quiz vide si pas demandé
+    
+    return LessonFormatted(
+        title=content.title, 
+        markdown=markdown, 
+        quiz=quiz
+    )

@@ -49,7 +49,10 @@ class LessonRequest(BaseModel):
     duration: Literal["short", "medium", "long"] = Field(
         ..., description="Durée souhaitée de la leçon"
     )
-
+    include_quiz: bool = Field(
+        default=False, 
+        description="Générer un quiz avec la leçon"
+    )
 
 class LessonContent(BaseModel):
     """Sortie du générateur (plan + texte)."""
