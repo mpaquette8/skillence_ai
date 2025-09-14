@@ -38,11 +38,14 @@ logger = logging.getLogger("skillence_ai.main")
 
 # Modèles de réponse API (SANS QUIZ)
 class LessonResponse(BaseModel):
-    """Réponse POST /v1/lessons (création) - SIMPLIFIÉ."""
+    """Réponse POST /v1/lessons (création) - SIMPLIFIÉ.
+
+    Inclut les métriques de qualité (ex: lisibilité) sous ``quality``.
+    """
     lesson_id: str
     title: str
     message: str
-    readability: Dict[str, Any]
+    quality: Dict[str, Any]
     from_cache: Optional[bool] = False
 
 
@@ -86,7 +89,7 @@ def health() -> Dict[str, str]:
 def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
     """
     Crée une leçon pédagogique de qualité (plan + contenu vulgarisé).
-    FOCUS v0.1: Excellence du contenu explicatif.
+    Retourne les métadonnées de leçon et un résumé ``quality`` (ex: lisibilité).
     """
     try:
         result = create_lesson(payload)
@@ -95,7 +98,7 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
             lesson_id=result["lesson_id"],
             title=result["title"],
             message="Leçon pédagogique générée avec succès",
-            readability=result["readability"],
+            quality=result["quality"],
             from_cache=result.get("from_cache", False),
         )
         
