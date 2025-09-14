@@ -1,20 +1,22 @@
-# // file: api/main.py
-
 """
-Application FastAPI complète avec système de logs (MVP v0.1).
-Intègre le middleware de correlation ID pour traçabilité.
+Application FastAPI SIMPLIFIÉE (sans quiz) avec logs (MVP v0.1.2).
+
+NETTOYAGE v0.1.2:
+- Suppression des références quiz dans les réponses API
+- Focus sur le contenu pédagogique de qualité
+- Middleware de logging maintenu
 """
 
 # Inventaire des dépendances
+# - logging (stdlib) : configuration des logs — système de logging
 # - fastapi (tierce) : framework ASGI + HTTPException — serveur principal
 # - pydantic (tierce) : modèles de réponse API — validation I/O
 # - typing (stdlib) : annotations de types — améliore lisibilité
-# - logging (stdlib) : configuration des logs — système de logging
 # - agents.lesson_generator (local) : DTO d'entrée — modèle de requête
 # - api.services.lessons (local) : orchestration métier — logique principale  
 # - api.middleware.logging (local) : middleware de logs — corrélation requêtes
 # - storage.base (local) : initialisation DB — setup base de données
-import logging  # stdlib — configuration logging
+import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Optional
@@ -24,7 +26,6 @@ from api.services.lessons import create_lesson, get_lesson_by_id
 from api.middleware.logging import LoggingMiddleware
 from storage.base import init_db
 
-
 # Configuration des logs (format simple pour MVP)
 logging.basicConfig(
     level=logging.INFO,
@@ -32,13 +33,12 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-# Logger pour l'application principale
 logger = logging.getLogger("skillence_ai.main")
 
 
-# Modèles de réponse API (Pydantic v2)
+# Modèles de réponse API (SANS QUIZ)
 class LessonResponse(BaseModel):
-    """Réponse POST /v1/lessons (création)."""
+    """Réponse POST /v1/lessons (création) - SIMPLIFIÉ."""
     lesson_id: str
     title: str
     message: str
@@ -46,34 +46,31 @@ class LessonResponse(BaseModel):
 
 
 class LessonDetailResponse(BaseModel):
-    """Réponse GET /v1/lessons/{id} (détail complet)."""
+    """Réponse GET /v1/lessons/{id} (détail complet) - SANS QUIZ."""
     id: str
     title: str
     content: str
     objectives: list[str]
     plan: list[str]
-    quiz: list[dict]
+    # SUPPRIMÉ: quiz: list[dict]
     created_at: str
 
 
 # Application FastAPI avec middleware de logs
 app = FastAPI(
-    title="Skillence AI — MVP", 
-    version="0.1.0",
-    description="API de génération de leçons pédagogiques vulgarisées"
+    title="Skillence AI — MVP v0.1.2", 
+    version="0.1.2",
+    description="API de génération de leçons pédagogiques vulgarisées (sans quiz)"
 )
 
-# Ajouter le middleware de logging (important: avant les routes)
+# Ajouter le middleware de logging
 app.add_middleware(LoggingMiddleware)
 
 
 @app.on_event("startup")
 def startup_event() -> None:
-    """
-    Initialise l'application au démarrage.
-    Logs + DB initialization.
-    """
-    logger.info("Skillence AI starting up...")
+    """Initialise l'application au démarrage."""
+    logger.info("Skillence AI v0.1.2 starting up (focus: contenu de qualité)...")
     init_db()
     logger.info("Database initialized - ready to serve requests")
 
@@ -87,8 +84,8 @@ def health() -> Dict[str, str]:
 @app.post("/v1/lessons", response_model=LessonResponse)
 def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
     """
-    Crée une leçon (plan + contenu) à partir d'un sujet/audience/durée.
-    Logs intégrés pour traçabilité complète du processus.
+    Crée une leçon pédagogique de qualité (plan + contenu vulgarisé).
+    FOCUS v0.1: Excellence du contenu explicatif.
     """
     try:
         result = create_lesson(payload)
@@ -96,7 +93,7 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
         return LessonResponse(
             lesson_id=result["lesson_id"],
             title=result["title"],
-            message="Leçon générée avec succès",
+            message="Leçon pédagogique générée avec succès",
             from_cache=result.get("from_cache", False)
         )
         
@@ -111,7 +108,7 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
 @app.get("/v1/lessons/{lesson_id}", response_model=LessonDetailResponse)
 def get_lesson_endpoint(lesson_id: str) -> LessonDetailResponse:
     """
-    Récupère une leçon existante par son ID.
+    Récupère une leçon existante par son ID (contenu + métadonnées).
     """
     try:
         lesson_data = get_lesson_by_id(lesson_id)

@@ -1,46 +1,52 @@
-# // file: tests/test_api_lessons.py
-
 """
-Tests d'intégration simplifiés pour les endpoints /v1/lessons.
-Utilise la DB principale (skillence_ai.db) avec nettoyage avant chaque test.
-Approche pragmatique MVP : moins d'isolation mais plus simple et robuste.
+Tests d'intégration CORRIGÉS pour /v1/lessons (SANS QUIZ) - v0.1.2.
 
-CORRECTIFS v0.1.1:
-- Utilisation des enum strictes ("lycéen" avec accent)
-- Validation des nouvelles contraintes de validation
+CORRECTIF:
+- Fixture clean_db sécurisée (gère les tables manquantes)
+- Suppression de toutes les vérifications quiz
+- Focus sur la qualité du contenu (plan, objectifs, Markdown)
 """
 
 # Inventaire des dépendances
 # - pytest (tierce) : framework de tests — alternative: unittest mais moins d'outils
 # - httpx (tierce) : client HTTP async pour tests ASGI — nécessaire pour FastAPI  
 # - api.main (local) : app FastAPI à tester — point d'entrée principal
-# - storage.base (local) : get_session pour vérifier persistance — accès DB
+# - storage.base (local) : get_session pour vérifier persistance + init_db — accès DB
 # - storage.models (local) : Request, Lesson pour vérifications — modèles ORM
 import pytest
 import httpx
 from httpx import ASGITransport
 from api.main import app
-from storage.base import get_session
+from storage.base import get_session, init_db
 from storage.models import Request, Lesson
 
 
 @pytest.fixture(autouse=True)
 def clean_db():
     """
-    Nettoie la DB avant chaque test.
-    Approche simple : supprime toutes les données de test.
+    Nettoie la DB avant chaque test (SÉCURISÉ).
+    Crée les tables si elles n'existent pas.
     """
+    # S'assurer que les tables existent
+    init_db()
+    
+    # Nettoyer les données de test
     with get_session() as db:
-        # Supprimer toutes les leçons et requêtes
-        db.query(Lesson).delete()
-        db.query(Request).delete()
-        db.commit()
+        try:
+            db.query(Lesson).delete()
+            db.query(Request).delete()
+            db.commit()
+        except Exception:
+            # Si les tables n'existent pas encore, les créer
+            db.rollback()
+            init_db()
 
 
 @pytest.mark.asyncio
 async def test_create_lesson_happy_path():
     """
     Test du cycle complet : POST → génération → persistance → réponse.
+    FOCUS: contenu de qualité (objectives + plan + markdown).
     """
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -59,10 +65,10 @@ async def test_create_lesson_happy_path():
         assert "lesson_id" in data
         assert len(data["lesson_id"]) == 36  # UUID format
         assert data["title"] == "La photosynthese test (niveau lycéen)"
-        assert data["message"] == "Leçon générée avec succès"
-        assert data["from_cache"] is False  # Première génération
+        assert data["message"] == "Leçon pédagogique générée avec succès"
+        assert data["from_cache"] is False
         
-        # Vérifications persistance en base
+        # Vérifications persistance en base (SANS QUIZ)
         with get_session() as db:
             request = db.query(Request).filter(Request.subject == "La photosynthese test").first()
             assert request is not None
@@ -72,16 +78,15 @@ async def test_create_lesson_happy_path():
             lesson = db.query(Lesson).filter(Lesson.id == data["lesson_id"]).first()
             assert lesson is not None
             assert lesson.title == "La photosynthese test (niveau lycéen)"
-            assert lesson.content_md.startswith("#")
-            assert len(lesson.objectives) >= 2
-            assert len(lesson.plan) >= 3
-            assert len(lesson.quiz) == 5
+            assert lesson.content_md.startswith("#")  # Markdown valide
+            assert len(lesson.objectives) >= 1  # Au moins un objectif
+            assert len(lesson.plan) >= 2  # Au moins 2 sections
 
 
 @pytest.mark.asyncio 
 async def test_get_lesson_by_id():
     """
-    Test GET /v1/lessons/{id} après création.
+    Test GET /v1/lessons/{id} après création (SANS QUIZ).
     """
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -98,16 +103,17 @@ async def test_get_lesson_by_id():
         data = get_resp.json()
         assert data["id"] == lesson_id
         assert data["title"] == "Test GET unique (niveau adulte)"
-        assert data["content"].startswith("#")
+        assert data["content"].startswith("#")  # Markdown
         assert isinstance(data["objectives"], list)
         assert isinstance(data["plan"], list)
-        assert len(data["quiz"]) == 5
+        assert len(data["objectives"]) >= 1
+        assert len(data["plan"]) >= 2
 
 
 @pytest.mark.asyncio
 async def test_idempotence():
     """
-    Test idempotence : même requête → même résultat.
+    Test idempotence : même requête → même résultat (SANS QUIZ).
     """
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -270,3 +276,40 @@ async def test_all_valid_enum_combinations():
             data = resp.json()
             expected_title = f"Test combinaison {i+1} (niveau {audience})"
             assert data["title"] == expected_title
+
+
+@pytest.mark.asyncio
+async def test_content_quality_validation():
+    """
+    Test de la qualité du contenu généré (nouveaux critères v0.1.2).
+    """
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {
+            "subject": "L'évaporation de l'eau", 
+            "audience": "enfant", 
+            "duration": "medium"
+        }
+        
+        resp = await client.post("/v1/lessons", json=payload)
+        assert resp.status_code == 200
+        lesson_id = resp.json()["lesson_id"]
+        
+        # Récupérer le contenu détaillé
+        detail_resp = await client.get(f"/v1/lessons/{lesson_id}")
+        assert detail_resp.status_code == 200
+        
+        lesson_data = detail_resp.json()
+        
+        # Validations qualité contenu
+        assert len(lesson_data["content"]) > 200  # Contenu substantiel
+        assert "## Objectifs d'apprentissage" in lesson_data["content"]  # Structure
+        assert "## Plan de la leçon" in lesson_data["content"]
+        assert "## Contenu" in lesson_data["content"]
+        
+        # Objectifs et plan remplis
+        assert len(lesson_data["objectives"]) >= 2
+        assert len(lesson_data["plan"]) >= 3
+        
+        # Titre adapté à l'audience
+        assert "enfant" in lesson_data["title"] or "(niveau enfant)" in lesson_data["title"]

@@ -1,29 +1,32 @@
-# // file: api/services/lessons.py
-
 """
-Service d'orchestration avec logs intégrés.
-Trace les opérations agent + persistance pour debugging et monitoring.
+Service d'orchestration SIMPLIFIÉ (sans quiz).
+
+NETTOYAGE v0.1.2:
+- Suppression de la logique quiz partout
+- Focus sur génération + formatage + persistance de qualité
+- Logs maintenus pour traçabilité
 """
 
 # Inventaire des dépendances
-# - hashlib (stdlib) : hash SHA-256 pour idempotence 
-# - json (stdlib) : sérialisation stable pour hash
+# - hashlib (stdlib) : hash SHA-256 pour idempotence — éviter doublons
+# - json (stdlib) : sérialisation stable pour hash — alternative: pickle mais moins portable  
 # - time (stdlib) : mesure des durées — nécessaire pour logs de performance
-# - typing (stdlib) : annotations de types
-# - agents.lesson_generator (local) : DTOs + logique de génération
-# - storage.base (local) : session DB
-# - storage.models (local) : ORM Request/Lesson  
-# - api.middleware.logging (local) : helper de logs contextualisé
+# - typing (stdlib) : annotations de types — améliore lisibilité
+# - agents.lesson_generator (local) : DTOs + logique de génération — contenu principal
+# - agents.formatter (local) : formatage Markdown — mise en forme
+# - storage.base (local) : session DB — persistance
+# - storage.models (local) : ORM Request/Lesson — modèles de données
+# - api.middleware.logging (local) : helper de logs contextualisé — traçabilité
 import hashlib
 import json
-import time  # stdlib — timing pour logs
+import time
 from typing import Dict, Optional
 
 from agents.lesson_generator import LessonRequest, LessonContent, generate_lesson
 from agents.formatter import format_lesson
 from storage.base import get_session
 from storage.models import Request, Lesson
-from api.middleware.logging import log_operation  # local — logs avec request_id
+from api.middleware.logging import log_operation
 
 
 def _compute_request_hash(request: LessonRequest) -> str:
@@ -40,7 +43,7 @@ def _compute_request_hash(request: LessonRequest) -> str:
 
 def create_lesson(request: LessonRequest) -> Dict[str, str]:
     """
-    Orchestre génération + persistance avec logs détaillés.
+    Orchestre génération + formatage + persistance (SANS QUIZ).
     """
     start_time = time.time()
     
@@ -60,19 +63,19 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
                 "from_cache": True
             }
     
-    # 2. Génération de contenu
+    # 2. Génération de contenu (focus qualité)
     generation_start = time.time()
     log_operation("agent_generation_started", 
                   subject=request.subject, audience=request.audience)
     
     lesson_content = generate_lesson(request)
-    formatted = format_lesson(lesson_content, include_quiz=request.include_quiz)
+    formatted = format_lesson(lesson_content)  # SIMPLIFIÉ: plus de paramètre quiz
     
     generation_duration = int((time.time() - generation_start) * 1000)
     log_operation("agent_generation_completed", generation_duration,
                   content_length=len(lesson_content.content))
     
-    # 3. Persistance en base
+    # 3. Persistance en base (sans champs quiz)
     persistence_start = time.time()
     
     with get_session() as db:
@@ -86,7 +89,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
         db.add(db_request)
         db.flush()
         
-        # Créer Lesson
+        # Créer Lesson (sans quiz)
         db_lesson = Lesson(
             request_id=db_request.id,
             title=lesson_content.title,
@@ -94,7 +97,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
         )
         db_lesson.objectives = lesson_content.objectives
         db_lesson.plan = lesson_content.plan
-        db_lesson.quiz = [q.model_dump() for q in formatted.quiz]
+        # SUPPRIMÉ: db_lesson.quiz
         
         db.add(db_lesson)
         db.commit()
@@ -116,7 +119,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
 
 def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
     """
-    Récupère une leçon avec log simple.
+    Récupère une leçon par ID (sans quiz).
     """
     start_time = time.time()
     
@@ -133,7 +136,7 @@ def get_lesson_by_id(lesson_id: str) -> Optional[Dict]:
                 "content": lesson.content_md,
                 "objectives": lesson.objectives,
                 "plan": lesson.plan,
-                "quiz": lesson.quiz,
+                # SUPPRIMÉ: "quiz": lesson.quiz,
                 "created_at": lesson.created_at.isoformat()
             }
             return formatted
