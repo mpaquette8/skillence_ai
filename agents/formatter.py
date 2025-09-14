@@ -27,8 +27,8 @@ class LessonFormatted(BaseModel):
     # SUPPRIMÉ: quiz field
 
 
-def _build_markdown(content: LessonContent) -> str:
-    """Assemble un Markdown pédagogique de qualité."""
+def _build_markdown(content: LessonContent, readability: dict | None = None) -> str:
+    """Assemble un Markdown pédagogique de qualité et ses métriques."""
     lines = [f"# {content.title}", ""]
 
     # Objectifs d'apprentissage
@@ -48,6 +48,13 @@ def _build_markdown(content: LessonContent) -> str:
     lines.append(content.content)
     lines.append("")
 
+    # Section finale avec les métriques calculées
+    if readability:
+        lines.append("## Métriques de lisibilité")
+        for key, value in readability.items():
+            lines.append(f"- {key}: {value}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -61,12 +68,19 @@ def format_lesson(content: LessonContent, audience: str) -> LessonFormatted:
 
     Returns:
         Markdown formaté prêt à l'export
+
+    Trade-off:
+        Pour rester simple, le Markdown est reconstruit après calcul de la
+        lisibilité afin d'y insérer les métriques. Cela entraîne une légère
+        duplication mais évite une logique d'insertion plus complexe.
     """
-    markdown = _build_markdown(content)
+    markdown_base = _build_markdown(content)
 
     # Analyse de lisibilité adaptée à l'audience fournie
-    score = validate_readability_for_audience(markdown, audience)
+    score = validate_readability_for_audience(markdown_base, audience)
     readability = get_readability_summary(score)
+
+    markdown = _build_markdown(content, readability)
 
     return LessonFormatted(
         title=content.title,

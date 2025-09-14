@@ -31,6 +31,7 @@ def test_format_lesson_creates_structured_markdown():
     assert "## Objectifs d'apprentissage" in formatted.markdown
     assert "## Plan de la leçon" in formatted.markdown
     assert "## Contenu" in formatted.markdown
+    assert "## Métriques de lisibilité" in formatted.markdown
     
     # Vérifications contenu
     assert "- Comprendre le processus" in formatted.markdown
@@ -39,6 +40,8 @@ def test_format_lesson_creates_structured_markdown():
     assert "2. Le processus" in formatted.markdown
     assert "3. Importance écologique" in formatted.markdown
     assert "La photosynthèse est un processus vital..." in formatted.markdown
+    assert "- flesch_kincaid_score" in formatted.markdown
+    assert "- audience_target: lycéen" in formatted.markdown
     
     # Vérifications modèle
     assert formatted.title == "La photosynthèse expliquée"
@@ -69,6 +72,7 @@ def test_format_lesson_handles_minimal_content():
     assert "1. Section A" in formatted.markdown
     assert "2. Section B" in formatted.markdown
     assert "Contenu court." in formatted.markdown
+    assert "## Métriques de lisibilité" in formatted.markdown
 
     # Lisibilité disponible même pour contenu minimal
     assert isinstance(formatted.readability, dict)
