@@ -51,20 +51,21 @@ def _build_markdown(content: LessonContent) -> str:
     return "\n".join(lines)
 
 
-def format_lesson(content: LessonContent) -> LessonFormatted:
+def format_lesson(content: LessonContent, audience: str) -> LessonFormatted:
     """
     Construit un Markdown pédagogique structuré (FOCUS v0.1).
-    
+
     Args:
         content: Contenu généré par lesson_generator
-        
+        audience: Public cible servant à évaluer la lisibilité
+
     Returns:
         Markdown formaté prêt à l'export
     """
     markdown = _build_markdown(content)
 
-    # Analyse de lisibilité pour audience par défaut 'lycéen'
-    score = validate_readability_for_audience(markdown, "lycéen")
+    # Analyse de lisibilité adaptée à l'audience fournie
+    score = validate_readability_for_audience(markdown, audience)
     readability = get_readability_summary(score)
 
     return LessonFormatted(

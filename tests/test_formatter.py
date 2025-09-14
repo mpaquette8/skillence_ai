@@ -24,7 +24,7 @@ def test_format_lesson_creates_structured_markdown():
         content="La photosynthèse est un processus vital...",
     )
 
-    formatted = format_lesson(content)
+    formatted = format_lesson(content, "lycéen")
 
     # Vérifications structure Markdown
     assert formatted.markdown.startswith("# La photosynthèse expliquée")
@@ -60,7 +60,7 @@ def test_format_lesson_handles_minimal_content():
         content="Contenu court.",
     )
 
-    formatted = format_lesson(content)
+    formatted = format_lesson(content, "lycéen")
     
     # Structure présente même avec contenu minimal
     assert "# Test minimal" in formatted.markdown
