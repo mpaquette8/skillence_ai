@@ -14,9 +14,9 @@ CORRECTIFS v0.1.2:
 # - unittest.mock (stdlib) : patch configuration — isolation environnement test
 # - tempfile (stdlib) : fichiers temporaires — DB de test isolée
 # - pathlib (stdlib) : manipulation chemins — gestion fichiers
-# - sqlalchemy (tierce) : moteur test — création tables
+# - sqlalchemy (tierce) : moteur test et requêtes — création tables
 # - api.main (local) : app FastAPI — application à tester
-# - storage.base (local) : Base, get_session — schéma + sessions
+# - storage.base (local) : Base, SessionLocal — schéma + sessions
 # - storage.models (local) : Request, Lesson — modèles ORM
 import pytest
 import httpx
@@ -24,11 +24,11 @@ from httpx import ASGITransport
 from unittest.mock import patch
 import tempfile
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, Session
 
 from api.main import app
-from storage.base import Base
+from storage.base import Base, SessionLocal
 from storage.models import Request, Lesson
 
 
@@ -101,6 +101,30 @@ async def test_create_lesson_happy_path_isolated(test_app_with_isolated_db):
         assert isinstance(
             data["quality"]["readability"]["is_appropriate_for_audience"], bool
         )
+
+
+@pytest.mark.asyncio
+async def test_same_payload_uses_cache(test_app_with_isolated_db):
+    """Deux POST identiques: second provient du cache et une seule ligne Lesson."""
+    transport = ASGITransport(app=test_app_with_isolated_db)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {
+            "subject": "Cache test",
+            "audience": "lycéen",
+            "duration": "short",
+        }
+
+        first_resp = await client.post("/v1/lessons", json=payload)
+        second_resp = await client.post("/v1/lessons", json=payload)
+
+        assert first_resp.status_code == 200
+        assert second_resp.status_code == 200
+        assert second_resp.json()["from_cache"] is True
+
+    with SessionLocal() as db:
+        lessons = db.execute(select(Lesson)).scalars().all()
+        assert len(lessons) == 1
 
 
 @pytest.mark.asyncio
