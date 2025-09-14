@@ -77,7 +77,14 @@ curl -X POST http://localhost:8000/v1/lessons \
   "lesson_id": "abc12345-...",
   "title": "La photosynthèse (niveau lycéen)",
   "message": "Leçon générée avec succès",
-  "from_cache": false
+  "from_cache": false,
+  "quality": {
+    "readability": {
+      "score": 72.5,
+      "level": "facile"
+    }
+  },
+  "tokens_used": 123
 }
 ```
 
@@ -86,7 +93,7 @@ curl -X POST http://localhost:8000/v1/lessons \
 curl http://localhost:8000/v1/lessons/abc12345-...
 ```
 
-**Réponse :** JSON avec le contenu complet (Markdown + objectifs + plan + quiz)
+**Réponse :** JSON avec le contenu complet (Markdown + objectifs + plan) et les métriques `quality`
 
 ---
 
@@ -96,7 +103,7 @@ curl http://localhost:8000/v1/lessons/abc12345-...
 |----------|---------|-------------|
 | `/v1/health` | GET | Vérification de santé |
 | `/v1/lessons` | POST | Génère une nouvelle leçon |
-| `/v1/lessons/{id}` | GET | Récupère une leçon par ID |
+| `/v1/lessons/{id}` | GET | Récupère une leçon (inclut `quality`, sans quiz) |
 
 ### Format des requêtes
 
@@ -229,7 +236,7 @@ skillence_ai/
 │   └── middleware/logging.py # Logs + correlation ID
 ├── agents/
 │   ├── lesson_generator.py  # Appel OpenAI + validation
-│   └── formatter.py         # Markdown + quiz
+│   └── formatter.py         # Format Markdown
 ├── storage/
 │   ├── base.py             # Config DB + sessions
 │   └── models.py           # ORM Request/Lesson
