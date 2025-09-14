@@ -94,9 +94,12 @@ async def test_create_lesson_happy_path_isolated(test_app_with_isolated_db):
         assert len(data["lesson_id"]) == 36  # UUID
         assert data["title"] == "Test isolation complète (niveau lycéen)"
         assert data["from_cache"] is False
-        assert "readability" in data
-        assert data["readability"]["audience_target"] == "lycéen"
-        assert isinstance(data["readability"]["is_appropriate_for_audience"], bool)
+        assert "quality" in data
+        assert "readability" in data["quality"]
+        assert data["quality"]["readability"]["audience_target"] == "lycéen"
+        assert isinstance(
+            data["quality"]["readability"]["is_appropriate_for_audience"], bool
+        )
         
 
 @pytest.mark.asyncio

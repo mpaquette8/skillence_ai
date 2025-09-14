@@ -54,7 +54,8 @@ def _compute_request_hash(request: LessonRequest) -> str:
 def create_lesson(request: LessonRequest) -> Dict[str, Any]:
     """
     Orchestre génération + formatage + persistance (SANS QUIZ).
-    Ajoute validation de lisibilité selon l'audience.
+    Ajoute validation de lisibilité selon l'audience et retourne
+    un dictionnaire avec métadonnées et métriques ``quality``.
     """
     start_time = time.time()
 
@@ -81,11 +82,12 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
                     f"score={cached_score.flesch_kincaid:.1f}"
                 )
 
+            # Résumé lisibilité exposé via "quality"
             return {
                 "lesson_id": existing.lessons[0].id,
                 "title": existing.lessons[0].title,
                 "from_cache": True,
-                "readability": cached_summary,
+                "quality": {"readability": cached_summary},
             }
 
     # 2. Génération de contenu (focus qualité)
@@ -146,11 +148,12 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
         log_operation("lesson_creation_completed", total_duration,
                       from_cache=False)
 
+        # Inclut les métriques de lisibilité dans "quality"
         return {
             "lesson_id": db_lesson.id,
             "title": db_lesson.title,
             "from_cache": False,
-            "readability": readability_summary,
+            "quality": {"readability": readability_summary},
         }
 
 
