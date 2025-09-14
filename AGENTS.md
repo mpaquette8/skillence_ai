@@ -1,4 +1,4 @@
-# agent.md — Règles d’utilisation des agents IA pour **Skillence\_AI**
+# AGENTS.md — Règles d’utilisation des agents IA pour **Skillence\_AI**
 
 **Version :** 0.1 • **Date :** 2025‑09‑13 • **Propriété :** Maxime • **Langue :** FR
 
