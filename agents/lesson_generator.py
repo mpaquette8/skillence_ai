@@ -16,12 +16,14 @@ Contraintes MVP :
 
 # Inventaire des dépendances
 # - typing (stdlib) : types statiques (List, Literal) — Literal pour enum strictes
+# - time (stdlib) : pause avant retry en cas d'erreurs transitoires — alternative: asyncio.sleep mais impose async
 # - json (stdlib) : parse la réponse OpenAI — alternative: eval() mais dangereux
 # - fastapi (tierce) : HTTPException pour les erreurs API — standard FastAPI
 # - openai (tierce) : client OpenAI officiel — alternative: requests mais moins pratique
 # - pydantic (tierce) : modèles de validation v2 — alternative: dataclasses mais validation manuelle
 # - .token_utils (local) : validation budget — contrôle coûts MVP critique
 from typing import List, Literal
+import time
 import json
 
 from fastapi import HTTPException
@@ -90,47 +92,60 @@ def generate_lesson(request: LessonRequest) -> LessonContent:
         "duration": request.duration
     })
     
-    # Appel OpenAI avec gestion d'erreurs spécifiques
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,  # Limite réponse (le prompt est déjà validé)
-            temperature=0.3
-        )
-        
-    except Exception as exc:
-        error_msg = str(exc).lower()
-        
-        if "timeout" in error_msg or "timed out" in error_msg:
+    # Appel OpenAI avec gestion d'erreurs spécifiques + retry simple
+    for attempt in range(2):  # 1 tentative initiale + 1 retry
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,  # Limite réponse (le prompt est déjà validé)
+                temperature=0.3
+            )
+            break  # Succès, sortie de la boucle
+
+        except Exception as exc:
+            error_msg = str(exc).lower()
+
+            # Erreurs transitoires -> petite pause puis retry si possible
+            transient = (
+                "timeout" in error_msg
+                or "timed out" in error_msg
+                or "rate limit" in error_msg
+                or "429" in error_msg
+            )
+            if attempt == 0 and transient:
+                time.sleep(2)
+                continue
+
+            if "timeout" in error_msg or "timed out" in error_msg:
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Timeout OpenAI ({settings.OPENAI_TIMEOUT}s) - Réessayez dans quelques secondes"
+                ) from exc
+
+            elif "rate limit" in error_msg or "429" in error_msg:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Limite de taux OpenAI atteinte - Réessayez dans 1 minute"
+                ) from exc
+
+            elif "quota" in error_msg or "402" in error_msg:
+                raise HTTPException(
+                    status_code=402,
+                    detail="Quota OpenAI épuisé - Vérifiez votre compte sur platform.openai.com"
+                ) from exc
+
+            elif "authentication" in error_msg or "401" in error_msg:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Clé OpenAI invalide - Vérifiez OPENAI_API_KEY dans .env"
+                ) from exc
+
+            # Erreur générique
             raise HTTPException(
-                status_code=504, 
-                detail=f"Timeout OpenAI ({settings.OPENAI_TIMEOUT}s) - Réessayez dans quelques secondes"
+                status_code=500,
+                detail=f"Erreur OpenAI: {str(exc)[:100]}"
             ) from exc
-        
-        elif "rate limit" in error_msg or "429" in error_msg:
-            raise HTTPException(
-                status_code=429,
-                detail="Limite de taux OpenAI atteinte - Réessayez dans 1 minute"
-            ) from exc
-            
-        elif "quota" in error_msg or "402" in error_msg:
-            raise HTTPException(
-                status_code=402, 
-                detail="Quota OpenAI épuisé - Vérifiez votre compte sur platform.openai.com"
-            ) from exc
-            
-        elif "authentication" in error_msg or "401" in error_msg:
-            raise HTTPException(
-                status_code=401,
-                detail="Clé OpenAI invalide - Vérifiez OPENAI_API_KEY dans .env"
-            ) from exc
-        
-        # Erreur générique
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Erreur OpenAI: {str(exc)[:100]}"
-        ) from exc
 
     # Extraction et validation de la réponse
     try:
