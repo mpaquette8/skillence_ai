@@ -50,7 +50,7 @@ class LessonResponse(BaseModel):
 
 
 class LessonDetailResponse(BaseModel):
-    """Réponse GET /v1/lessons/{id} (détail complet) - SANS QUIZ."""
+    """Réponse GET /v1/lessons/{id} (détail complet) avec métriques."""
     id: str
     title: str
     content: str
@@ -58,6 +58,7 @@ class LessonDetailResponse(BaseModel):
     plan: list[str]
     # SUPPRIMÉ: quiz: list[dict]
     created_at: str
+    quality: Dict[str, Any]
 
 
 # Application FastAPI avec middleware de logs
@@ -113,7 +114,7 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
 @app.get("/v1/lessons/{lesson_id}", response_model=LessonDetailResponse)
 def get_lesson_endpoint(lesson_id: str) -> LessonDetailResponse:
     """
-    Récupère une leçon existante par son ID (contenu + métadonnées).
+    Récupère une leçon existante par son ID (contenu, métadonnées et métriques).
     """
     try:
         lesson_data = get_lesson_by_id(lesson_id)
