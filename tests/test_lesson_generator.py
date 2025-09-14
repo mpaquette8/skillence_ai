@@ -177,35 +177,66 @@ def test_generate_lesson_content_quality_validation(mock_client):
             "sections" in exc_info.value.detail.lower())
 
 
+@patch('agents.lesson_generator.time.sleep', return_value=None)
 @patch('agents.lesson_generator.client')
-def test_generate_lesson_openai_timeout_error(mock_client):
-    """Test gestion timeout OpenAI spécifique."""
-    
-    # Mock timeout exception
+def test_generate_lesson_openai_timeout_error(mock_client, _mock_sleep):
+    """Test gestion timeout OpenAI spécifique avec retry."""
+
+    # Mock timeout exception sur chaque appel
     mock_client.chat.completions.create.side_effect = Exception("Request timed out")
-    
+
     request = LessonRequest(subject="Test", audience="enfant", duration="short")
-    
+
     with pytest.raises(HTTPException) as exc_info:
         generate_lesson(request)
-        
+
     assert exc_info.value.status_code == 504
     assert "Timeout OpenAI" in exc_info.value.detail
     assert "Réessayez" in exc_info.value.detail
+    assert mock_client.chat.completions.create.call_count == 2
 
 
+@patch('agents.lesson_generator.time.sleep', return_value=None)
 @patch('agents.lesson_generator.client')
-def test_generate_lesson_rate_limit_error(mock_client):
-    """Test gestion rate limiting OpenAI."""
-    
-    # Mock rate limit exception
+def test_generate_lesson_rate_limit_error(mock_client, _mock_sleep):
+    """Test gestion rate limiting OpenAI avec retry."""
+
+    # Mock rate limit exception sur chaque appel
     mock_client.chat.completions.create.side_effect = Exception("rate limit exceeded")
-    
+
     request = LessonRequest(subject="Test", audience="adulte", duration="medium")
-    
+
     with pytest.raises(HTTPException) as exc_info:
         generate_lesson(request)
-        
+
     assert exc_info.value.status_code == 429
     assert "Limite de taux" in exc_info.value.detail
     assert "Réessayez dans 1 minute" in exc_info.value.detail
+    assert mock_client.chat.completions.create.call_count == 2
+
+
+@patch('agents.lesson_generator.time.sleep', return_value=None)
+@patch('agents.lesson_generator.client')
+def test_generate_lesson_retry_success(mock_client, _mock_sleep):
+    """Test qu'une erreur transitoire est retentée avant succès."""
+
+    # Première tentative: rate limit, seconde: réponse valide
+    mock_response = Mock()
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message.content = json.dumps({
+        "title": "Retry Title",
+        "objectives": ["Obj"],
+        "plan": ["Section 1", "Section 2"],
+        "content": "Contenu après retry"
+    })
+    mock_client.chat.completions.create.side_effect = [
+        Exception("rate limit exceeded"),
+        mock_response,
+    ]
+
+    request = LessonRequest(subject="Retry", audience="enfant", duration="short")
+    result = generate_lesson(request)
+
+    assert isinstance(result, LessonContent)
+    assert result.title == "Retry Title"
+    assert mock_client.chat.completions.create.call_count == 2
