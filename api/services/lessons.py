@@ -9,24 +9,34 @@ NETTOYAGE v0.1.2:
 
 # Inventaire des dépendances
 # - hashlib (stdlib) : hash SHA-256 pour idempotence — éviter doublons
-# - json (stdlib) : sérialisation stable pour hash — alternative: pickle mais moins portable  
+# - json (stdlib) : sérialisation stable pour hash — alternative: pickle mais moins portable
 # - time (stdlib) : mesure des durées — nécessaire pour logs de performance
+# - logging (stdlib) : warnings lisibilité — traçabilité
 # - typing (stdlib) : annotations de types — améliore lisibilité
 # - agents.lesson_generator (local) : DTOs + logique de génération — contenu principal
 # - agents.formatter (local) : formatage Markdown — mise en forme
+# - agents.quality_utils (local) : validation lisibilité — vérification audience
 # - storage.base (local) : session DB — persistance
 # - storage.models (local) : ORM Request/Lesson — modèles de données
 # - api.middleware.logging (local) : helper de logs contextualisé — traçabilité
 import hashlib
 import json
 import time
-from typing import Dict, Optional
+import logging
+from typing import Dict, Optional, Any
 
 from agents.lesson_generator import LessonRequest, LessonContent, generate_lesson
 from agents.formatter import format_lesson
+from agents.quality_utils import (
+    validate_readability_for_audience,
+    get_readability_summary,
+)
 from storage.base import get_session
 from storage.models import Request, Lesson
-from api.middleware.logging import log_operation
+from api.middleware.logging import log_operation, get_request_id
+
+# Logger dédié à la lisibilité
+logger = logging.getLogger("skillence_ai.readability")
 
 
 def _compute_request_hash(request: LessonRequest) -> str:
@@ -41,54 +51,80 @@ def _compute_request_hash(request: LessonRequest) -> str:
     return hashlib.sha256(json_bytes).hexdigest()
 
 
-def create_lesson(request: LessonRequest) -> Dict[str, str]:
+def create_lesson(request: LessonRequest) -> Dict[str, Any]:
     """
     Orchestre génération + formatage + persistance (SANS QUIZ).
+    Ajoute validation de lisibilité selon l'audience.
     """
     start_time = time.time()
-    
+
     # 1. Calcul hash + vérification cache
     request_hash = _compute_request_hash(request)
     log_operation("idempotence_check", hash=request_hash[:8])
-    
+
     with get_session() as db:
         existing = db.query(Request).filter(Request.input_hash == request_hash).first()
         if existing and existing.lessons:
             cache_duration = int((time.time() - start_time) * 1000)
-            log_operation("lesson_from_cache", cache_duration, 
+            log_operation("lesson_from_cache", cache_duration,
                          lesson_id=existing.lessons[0].id[:8])
+
+            # Analyse lisibilité sur contenu en cache
+            cached_score = validate_readability_for_audience(
+                existing.lessons[0].content_md, request.audience
+            )
+            cached_summary = get_readability_summary(cached_score)
+            if not cached_score.is_valid_for_audience:
+                logger.warning(
+                    f"[REQUEST {get_request_id()}] readability_warning - "
+                    f"lesson_id={existing.lessons[0].id[:8]}, audience={request.audience}, "
+                    f"score={cached_score.flesch_kincaid:.1f}"
+                )
+
             return {
                 "lesson_id": existing.lessons[0].id,
                 "title": existing.lessons[0].title,
-                "from_cache": True
+                "from_cache": True,
+                "readability": cached_summary,
             }
-    
+
     # 2. Génération de contenu (focus qualité)
     generation_start = time.time()
-    log_operation("agent_generation_started", 
+    log_operation("agent_generation_started",
                   subject=request.subject, audience=request.audience)
-    
+
     lesson_content = generate_lesson(request)
     formatted = format_lesson(lesson_content)  # SIMPLIFIÉ: plus de paramètre quiz
-    
+
+    # Validation lisibilité selon audience requête
+    readability_score = validate_readability_for_audience(
+        formatted.markdown, request.audience
+    )
+    readability_summary = get_readability_summary(readability_score)
+    if not readability_score.is_valid_for_audience:
+        logger.warning(
+            f"[REQUEST {get_request_id()}] readability_warning - "
+            f"audience={request.audience}, score={readability_score.flesch_kincaid:.1f}"
+        )
+
     generation_duration = int((time.time() - generation_start) * 1000)
     log_operation("agent_generation_completed", generation_duration,
                   content_length=len(lesson_content.content))
-    
+
     # 3. Persistance en base (sans champs quiz)
     persistence_start = time.time()
-    
+
     with get_session() as db:
         # Créer Request
         db_request = Request(
             subject=request.subject,
-            audience=request.audience, 
+            audience=request.audience,
             duration=request.duration,
             input_hash=request_hash
         )
         db.add(db_request)
         db.flush()
-        
+
         # Créer Lesson (sans quiz)
         db_lesson = Lesson(
             request_id=db_request.id,
@@ -98,22 +134,23 @@ def create_lesson(request: LessonRequest) -> Dict[str, str]:
         db_lesson.objectives = lesson_content.objectives
         db_lesson.plan = lesson_content.plan
         # SUPPRIMÉ: db_lesson.quiz
-        
+
         db.add(db_lesson)
         db.commit()
-        
+
         persistence_duration = int((time.time() - persistence_start) * 1000)
         total_duration = int((time.time() - start_time) * 1000)
-        
+
         log_operation("lesson_persisted", persistence_duration,
                       lesson_id=db_lesson.id[:8])
         log_operation("lesson_creation_completed", total_duration,
                       from_cache=False)
-        
+
         return {
             "lesson_id": db_lesson.id,
             "title": db_lesson.title,
-            "from_cache": False
+            "from_cache": False,
+            "readability": readability_summary,
         }
 
 
