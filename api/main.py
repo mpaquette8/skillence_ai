@@ -40,12 +40,14 @@ logger = logging.getLogger("skillence_ai.main")
 class LessonResponse(BaseModel):
     """Réponse POST /v1/lessons (création) - SIMPLIFIÉ.
 
-    Inclut les métriques de qualité (ex: lisibilité) sous ``quality``.
+    Inclut les métriques de qualité (ex: lisibilité) sous ``quality``
+    ainsi que les ``tokens_used``.
     """
     lesson_id: str
     title: str
     message: str
     quality: Dict[str, Any]
+    tokens_used: int
     from_cache: Optional[bool] = False
 
 
@@ -94,12 +96,13 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
     """
     try:
         result = create_lesson(payload)
-        
+
         return LessonResponse(
             lesson_id=result["lesson_id"],
             title=result["title"],
             message="Leçon pédagogique générée avec succès",
             quality=result["quality"],
+             tokens_used=result["tokens_used"],
             from_cache=result.get("from_cache", False),
         )
         

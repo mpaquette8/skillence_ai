@@ -45,7 +45,8 @@ def mock_openai_client():
         response.choices = [SimpleNamespace()]
         response.choices[0].message = SimpleNamespace()
         response.choices[0].message.content = json.dumps(payload)
-        
+        response.usage = SimpleNamespace(total_tokens=123)
+
         return response
 
     with patch('agents.lesson_generator.client.chat.completions.create', side_effect=fake_create):
