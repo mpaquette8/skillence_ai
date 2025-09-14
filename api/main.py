@@ -13,13 +13,13 @@ NETTOYAGE v0.1.2:
 # - pydantic (tierce) : modèles de réponse API — validation I/O
 # - typing (stdlib) : annotations de types — améliore lisibilité
 # - agents.lesson_generator (local) : DTO d'entrée — modèle de requête
-# - api.services.lessons (local) : orchestration métier — logique principale  
+# - api.services.lessons (local) : orchestration métier — logique principale
 # - api.middleware.logging (local) : middleware de logs — corrélation requêtes
 # - storage.base (local) : initialisation DB — setup base de données
 import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from agents.lesson_generator import LessonRequest
 from api.services.lessons import create_lesson, get_lesson_by_id
@@ -42,6 +42,7 @@ class LessonResponse(BaseModel):
     lesson_id: str
     title: str
     message: str
+    readability: Dict[str, Any]
     from_cache: Optional[bool] = False
 
 
@@ -94,7 +95,8 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
             lesson_id=result["lesson_id"],
             title=result["title"],
             message="Leçon pédagogique générée avec succès",
-            from_cache=result.get("from_cache", False)
+            readability=result["readability"],
+            from_cache=result.get("from_cache", False),
         )
         
     except Exception as exc:
