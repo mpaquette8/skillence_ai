@@ -15,14 +15,14 @@ Contraintes MVP :
 """
 
 # Inventaire des dépendances
-# - typing (stdlib) : types statiques (List, Literal) — Literal pour enum strictes
+# - typing (stdlib) : types statiques (List, Literal, Tuple) — Tuple pour retour multiple
 # - time (stdlib) : pause avant retry en cas d'erreurs transitoires — alternative: asyncio.sleep mais impose async
 # - json (stdlib) : parse la réponse OpenAI — alternative: eval() mais dangereux
 # - fastapi (tierce) : HTTPException pour les erreurs API — standard FastAPI
 # - openai (tierce) : client OpenAI officiel — alternative: requests mais moins pratique
 # - pydantic (tierce) : modèles de validation v2 — alternative: dataclasses mais validation manuelle
 # - .token_utils (local) : validation budget — contrôle coûts MVP critique
-from typing import List, Literal
+from typing import List, Literal, Tuple
 import time
 import json
 
@@ -61,11 +61,12 @@ class LessonContent(BaseModel):
     content: str
 
 
-def generate_lesson(request: LessonRequest) -> LessonContent:
+def generate_lesson(request: LessonRequest) -> Tuple[LessonContent, int]:
     """
     Génère une leçon de qualité via l'API OpenAI avec CONTRÔLE BUDGET.
-    
+
     NOUVEAU v0.1.3: Validation stricte 1800 tokens prompt avant appel API.
+    Retourne également le nombre total de tokens consommés.
     Focus v0.1: Excellence du contenu explicatif (sans quiz).
     """
     # Construction du prompt focalisé sur la qualité explicative
@@ -93,6 +94,7 @@ def generate_lesson(request: LessonRequest) -> LessonContent:
     })
     
     # Appel OpenAI avec gestion d'erreurs spécifiques + retry simple
+    total_tokens: int = 0
     for attempt in range(2):  # 1 tentative initiale + 1 retry
         try:
             resp = client.chat.completions.create(
@@ -101,6 +103,8 @@ def generate_lesson(request: LessonRequest) -> LessonContent:
                 max_tokens=200,  # Limite réponse (le prompt est déjà validé)
                 temperature=0.3
             )
+            # Lecture des tokens utilisés (0 si non fourni)
+            total_tokens = getattr(getattr(resp, "usage", None), "total_tokens", 0) or 0
             break  # Succès, sortie de la boucle
 
         except Exception as exc:
@@ -220,8 +224,8 @@ def generate_lesson(request: LessonRequest) -> LessonContent:
 
     # Construction du modèle validé
     try:
-        return LessonContent(**data)
-        
+        return LessonContent(**data), total_tokens
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,

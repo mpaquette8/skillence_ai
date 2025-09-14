@@ -55,7 +55,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
     """
     Orchestre génération + formatage + persistance (SANS QUIZ).
     Ajoute validation de lisibilité selon l'audience et retourne
-    un dictionnaire avec métadonnées et métriques ``quality``.
+    un dictionnaire avec métadonnées, métriques ``quality`` et ``tokens_used``.
     """
     start_time = time.time()
 
@@ -88,6 +88,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
                 "title": existing.lessons[0].title,
                 "from_cache": True,
                 "quality": {"readability": cached_summary},
+                "tokens_used": 0,
             }
 
     # 2. Génération de contenu (focus qualité)
@@ -95,7 +96,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
     log_operation("agent_generation_started",
                   subject=request.subject, audience=request.audience)
 
-    lesson_content = generate_lesson(request)
+    lesson_content, tokens_used = generate_lesson(request)
     formatted = format_lesson(lesson_content, request.audience)  # audience pour lisibilité
 
     # Validation lisibilité selon audience requête
@@ -110,8 +111,12 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
         )
 
     generation_duration = int((time.time() - generation_start) * 1000)
-    log_operation("agent_generation_completed", generation_duration,
-                  content_length=len(lesson_content.content))
+    log_operation(
+        "agent_generation_completed",
+        generation_duration,
+        content_length=len(lesson_content.content),
+        tokens_used=tokens_used,
+    )
 
     # 3. Persistance en base (sans champs quiz)
     persistence_start = time.time()
@@ -154,6 +159,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
             "title": db_lesson.title,
             "from_cache": False,
             "quality": {"readability": readability_summary},
+            "tokens_used": tokens_used,
         }
 
 

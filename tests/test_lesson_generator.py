@@ -62,22 +62,24 @@ def test_generate_lesson_success_single_parsing(mock_client):
     mock_response.choices = [Mock()]
     mock_response.choices[0].message.content = json.dumps({
         "title": "La physique quantique (niveau adulte)",
-        "objectives": ["Comprendre les principes de base", "Découvrir les applications"], 
+        "objectives": ["Comprendre les principes de base", "Découvrir les applications"],
         "plan": ["Introduction", "Principes fondamentaux", "Applications modernes"],
         "content": "# Introduction\nLa physique quantique révolutionne notre compréhension..."
     })
+    mock_response.usage = Mock(total_tokens=123)
     mock_client.chat.completions.create.return_value = mock_response
-    
+
     # Appel
     request = LessonRequest(subject="La physique quantique", audience="adulte", duration="medium")
-    result = generate_lesson(request)
-    
+    result, tokens = generate_lesson(request)
+
     # Vérifications
     assert isinstance(result, LessonContent)
     assert result.title == "La physique quantique (niveau adulte)"
     assert len(result.objectives) == 2
     assert len(result.plan) == 3
     assert "révolutionne notre compréhension" in result.content
+    assert tokens == 123
     
     # Vérifier un seul appel OpenAI avec les bons paramètres
     mock_client.chat.completions.create.assert_called_once()
@@ -229,14 +231,16 @@ def test_generate_lesson_retry_success(mock_client, _mock_sleep):
         "plan": ["Section 1", "Section 2"],
         "content": "Contenu après retry"
     })
+    mock_response.usage = Mock(total_tokens=55)
     mock_client.chat.completions.create.side_effect = [
         Exception("rate limit exceeded"),
         mock_response,
     ]
 
     request = LessonRequest(subject="Retry", audience="enfant", duration="short")
-    result = generate_lesson(request)
+    result, tokens = generate_lesson(request)
 
     assert isinstance(result, LessonContent)
     assert result.title == "Retry Title"
     assert mock_client.chat.completions.create.call_count == 2
+    assert tokens == 55
