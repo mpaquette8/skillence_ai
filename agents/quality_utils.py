@@ -18,7 +18,7 @@ TRADE-OFFS:
 # - dataclasses (stdlib) : structure de données simple — alternative: Pydantic mais redondant ici
 # - math (stdlib) : opérations mathématiques (moyenne) — nécessaire pour formule FK
 import re
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, Any
 from dataclasses import dataclass
 import math
 
@@ -211,7 +211,7 @@ def validate_readability_for_audience(text: str, audience: str) -> ReadabilitySc
     )
 
 
-def get_readability_summary(score: ReadabilityScore) -> Dict[str, any]:
+def get_readability_summary(score: ReadabilityScore) -> Dict[str, Any]:
     """
     Résumé des métriques de lisibilité pour l'API (format simple).
     
