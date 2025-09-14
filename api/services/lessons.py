@@ -96,7 +96,7 @@ def create_lesson(request: LessonRequest) -> Dict[str, Any]:
                   subject=request.subject, audience=request.audience)
 
     lesson_content = generate_lesson(request)
-    formatted = format_lesson(lesson_content)  # SIMPLIFIÉ: plus de paramètre quiz
+    formatted = format_lesson(lesson_content, request.audience)  # audience pour lisibilité
 
     # Validation lisibilité selon audience requête
     readability_score = validate_readability_for_audience(
