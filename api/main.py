@@ -7,19 +7,21 @@ NETTOYAGE v0.1.2:
 - Middleware de logging maintenu
 """
 
-# Inventaire des dépendances
-# - logging (stdlib) : configuration des logs — système de logging
-# - fastapi (tierce) : framework ASGI + HTTPException — serveur principal
-# - pydantic (tierce) : modèles de réponse API — validation I/O
-# - typing (stdlib) : annotations de types — améliore lisibilité
-# - agents.lesson_generator (local) : DTO d'entrée — modèle de requête
-# - api.services.lessons (local) : orchestration métier — logique principale
-# - api.middleware.logging (local) : middleware de logs — corrélation requêtes
-# - storage.base (local) : initialisation DB — setup base de données
+# Inventaire des dependances
+# - logging (stdlib) : configuration des logs -> systeme de logging
+# - contextlib (stdlib) : asynccontextmanager pour gerer le cycle de vie FastAPI
+# - fastapi (tierce) : framework ASGI + HTTPException -> serveur principal
+# - pydantic (tierce) : modeles de reponse API -> validation I/O
+# - typing (stdlib) : annotations de types (AsyncIterator inclus) -> ameliore lisibilite
+# - agents.lesson_generator (local) : DTO d'entree -> modele de requete
+# - api.services.lessons (local) : orchestration metier -> logique principale
+# - api.middleware.logging (local) : middleware de logs -> correlation requetes
+# - storage.base (local) : initialisation DB -> setup base de donnees
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, AsyncIterator
 
 from agents.lesson_generator import LessonRequest
 from api.services.lessons import create_lesson, get_lesson_by_id
@@ -35,6 +37,18 @@ logging.basicConfig(
 
 logger = logging.getLogger("skillence_ai.main")
 
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Initialise les ressources au demarrage et journalise la fermeture."""
+    logger.info(
+        "Skillence AI v0.1.2 starting up (focus: contenu pedagogique + lisibilite)..."
+    )
+    init_db()
+    logger.info("Database initialized - ready to serve requests")
+    try:
+        yield
+    finally:
+        logger.info("Skillence AI shutdown completed.")
 
 # Modèles de réponse API (SANS QUIZ)
 class LessonResponse(BaseModel):
@@ -50,7 +64,6 @@ class LessonResponse(BaseModel):
     tokens_used: int
     from_cache: Optional[bool] = False
 
-
 class LessonDetailResponse(BaseModel):
     """Réponse GET /v1/lessons/{id} (détail complet) avec métriques."""
     id: str
@@ -62,31 +75,21 @@ class LessonDetailResponse(BaseModel):
     created_at: str
     quality: Dict[str, Any]
 
-
 # Application FastAPI avec middleware de logs
 app = FastAPI(
-    title="Skillence AI — MVP v0.1.2", 
+    title="Skillence AI - MVP v0.1.2",
     version="0.1.2",
-    description="API de génération de leçons pédagogiques vulgarisées (sans quiz)"
+    description="API de generation de lecons pedagogiques vulgarisees (sans quiz)",
+    lifespan=lifespan
 )
 
 # Ajouter le middleware de logging
 app.add_middleware(LoggingMiddleware)
 
-
-@app.on_event("startup")
-def startup_event() -> None:
-    """Initialise l'application au démarrage."""
-    logger.info("Skillence AI v0.1.2 starting up (focus: contenu de qualité)...")
-    init_db()
-    logger.info("Database initialized - ready to serve requests")
-
-
 @app.get("/v1/health")
 def health() -> Dict[str, str]:
     """Vérification simple de vivacité."""
     return {"status": "ok"}
-
 
 @app.post("/v1/lessons", response_model=LessonResponse)
 def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
@@ -112,7 +115,6 @@ def create_lesson_endpoint(payload: LessonRequest) -> LessonResponse:
             status_code=500, 
             detail=f"Échec de génération de leçon: {str(exc)}"
         ) from exc
-
 
 @app.get("/v1/lessons/{lesson_id}", response_model=LessonDetailResponse)
 def get_lesson_endpoint(lesson_id: str) -> LessonDetailResponse:

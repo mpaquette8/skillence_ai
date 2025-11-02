@@ -20,7 +20,7 @@ Contraintes MVP :
 # - json (stdlib) : parse la réponse OpenAI — alternative: eval() mais dangereux
 # - fastapi (tierce) : HTTPException pour les erreurs API — standard FastAPI
 # - openai (tierce) : client OpenAI officiel — alternative: requests mais moins pratique
-# - pydantic (tierce) : modèles de validation v2 — alternative: dataclasses mais validation manuelle
+# - pydantic (tierce) : BaseModel/Field pour validation v2 ; field_validator pour nettoyer le sujet
 # - .token_utils (local) : validation budget — contrôle coûts MVP critique
 from typing import List, Literal, Tuple
 import time
@@ -28,7 +28,7 @@ import json
 
 from fastapi import HTTPException
 from openai import OpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from storage.base import settings
 from .token_utils import validate_prompt_budget
 
@@ -51,6 +51,15 @@ class LessonRequest(BaseModel):
     )
     
     # SUPPRIMÉ: include_quiz (reporté v0.2)
+
+    @field_validator("subject")
+    @classmethod
+    def normalize_subject(cls, value: str) -> str:
+        """Nettoie le sujet pour éviter les espaces/retours à la ligne superflus."""
+        normalized = " ".join(value.split())
+        if len(normalized) < 2:
+            raise ValueError("Le sujet doit contenir au moins 2 caractères significatifs")
+        return normalized
 
 
 class LessonContent(BaseModel):

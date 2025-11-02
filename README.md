@@ -76,12 +76,16 @@ curl -X POST http://localhost:8000/v1/lessons \
 {
   "lesson_id": "abc12345-...",
   "title": "La photosynthèse (niveau lycéen)",
-  "message": "Leçon générée avec succès",
+  "message": "Leçon pédagogique générée avec succès",
   "from_cache": false,
   "quality": {
     "readability": {
-      "score": 72.5,
-      "level": "facile"
+      "flesch_kincaid_score": 72.5,
+      "readability_level": "Facile",
+      "word_count": 845,
+      "is_appropriate_for_audience": true,
+      "audience_target": "lycéen",
+      "quality_message": "✅ Lisibilité adaptée au niveau lycéen (score: 72.5)"
     }
   },
   "tokens_used": 123
@@ -93,7 +97,14 @@ curl -X POST http://localhost:8000/v1/lessons \
 curl http://localhost:8000/v1/lessons/abc12345-...
 ```
 
-**Réponse :** JSON avec le contenu complet (Markdown + objectifs + plan) et les métriques `quality`
+**Réponse :** JSON avec le contenu complet (Markdown + objectifs + plan) et les métriques `quality` (lisibilité détaillée + audience visée)
+
+### Métriques & Logs
+- `tokens_used` : total de tokens consommés lors de l'appel OpenAI (0 si retour cache)
+- `quality.readability` : score Flesch-Kincaid, niveau de lisibilité, volume de mots et validation audience
+- Logs middleware (`skillence_ai.requests`) : chaque requête HTTP est tracée avec un `request_id`
+- Logs génération (`skillence_ai.readability`) : avertissement si la lisibilité sort de la plage recommandée
+- Timeout OpenAI : 15 s maximum par génération (`OPENAI_TIMEOUT` configurable)
 
 ---
 

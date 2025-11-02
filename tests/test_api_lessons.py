@@ -66,8 +66,13 @@ def test_app_with_isolated_db():
                         db.close()
                 
                 mock_get_session.side_effect = test_get_session
-                
-                yield app
+                original_session_local = globals().get("SessionLocal")
+                globals()["SessionLocal"] = TestSessionLocal
+                try:
+                    yield app
+                finally:
+                    if original_session_local is not None:
+                        globals()["SessionLocal"] = original_session_local
             
             test_engine.dispose()
 
@@ -186,3 +191,22 @@ async def test_validation_enum_strict():
         error_detail = resp.json()["detail"]
         assert len(error_detail) >= 1
         assert "literal_error" in error_detail[0]["type"]
+
+
+@pytest.mark.asyncio
+async def test_subject_cannot_be_blank_or_whitespace():
+    """Le sujet doit contenir des caractères utiles une fois normalisé."""
+    transport = ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {
+            "subject": "   \n   ",
+            "audience": "lycéen",
+            "duration": "short",
+        }
+
+        resp = await client.post("/v1/lessons", json=payload)
+
+        assert resp.status_code == 422
+        error_detail = resp.json()["detail"]
+        assert any("Le sujet doit contenir au moins 2 caractères significatifs" in err.get("msg", "") for err in error_detail)
