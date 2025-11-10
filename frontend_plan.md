@@ -36,7 +36,7 @@
    - Formulaire e-mail + envoi lien (mockable en dev).
    - Middleware session + tests (connexion/déconnexion).
 2. **Semaine 2** — UI cours
-   - Page dashboard (liste).
+   - Page dashboard (liste) � todo: appel GET /v1/lessons + rendu Markdown.
    - Vue détail Markdown (conversion côté serveur).
    - Formulaire génération + feedback état.
 3. **Semaine 3** — OAuth & polish

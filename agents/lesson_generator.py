@@ -102,134 +102,126 @@ def generate_lesson(request: LessonRequest) -> Tuple[LessonContent, int]:
         "duration": request.duration
     })
     
-    # Appel OpenAI avec gestion d'erreurs spécifiques + retry simple
+    def _call_openai(max_tokens: int) -> Tuple[str, int]:
+        """Encapsule l'appel OpenAI en gérant les erreurs transitoires."""
+        for attempt in range(2):
+            try:
+                resp_inner = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    temperature=0.3
+                )
+                total = getattr(getattr(resp_inner, "usage", None), "total_tokens", 0) or 0
+                content_inner = resp_inner.choices[0].message.content
+                if not content_inner or content_inner.strip() == "":
+                    raise HTTPException(
+                        status_code=500,
+                        detail="OpenAI a retourné une réponse vide"
+                    )
+                return content_inner, total
+            except Exception as exc:
+                error_msg = str(exc).lower()
+                transient = any(
+                    key in error_msg for key in ("timeout", "timed out", "rate limit", "429")
+                )
+                if attempt == 0 and transient:
+                    time.sleep(2)
+                    continue
+
+                if "timeout" in error_msg or "timed out" in error_msg:
+                    raise HTTPException(
+                        status_code=504,
+                        detail=f"Timeout OpenAI ({settings.OPENAI_TIMEOUT}s) - Réessayez dans quelques secondes"
+                    ) from exc
+                if "rate limit" in error_msg or "429" in error_msg:
+                    raise HTTPException(
+                        status_code=429,
+                        detail="Limite de taux OpenAI atteinte - Réessayez dans 1 minute"
+                    ) from exc
+                if "quota" in error_msg or "402" in error_msg:
+                    raise HTTPException(
+                        status_code=402,
+                        detail="Quota OpenAI épuisé - Vérifiez votre compte sur platform.openai.com"
+                    ) from exc
+                if "authentication" in error_msg or "401" in error_msg:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Clé OpenAI invalide - Vérifiez OPENAI_API_KEY dans .env"
+                    ) from exc
+
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Erreur OpenAI: {str(exc)[:100]}"
+                ) from exc
+
+        raise HTTPException(status_code=500, detail="Appel OpenAI impossible après retries")
+
+    content: str = ""
     total_tokens: int = 0
-    for attempt in range(2):  # 1 tentative initiale + 1 retry
+    max_tokens_candidates = [200, 320]
+    last_error: Optional[json.JSONDecodeError] = None
+
+    for max_tokens in max_tokens_candidates:
+        content, total_tokens = _call_openai(max_tokens)
+
         try:
-            resp = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,  # Limite réponse (le prompt est déjà validé)
-                temperature=0.3
-            )
-            # Lecture des tokens utilisés (0 si non fourni)
-            total_tokens = getattr(getattr(resp, "usage", None), "total_tokens", 0) or 0
-            break  # Succès, sortie de la boucle
+            data = json.loads(content)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            # Tentative suivante avec plus de tokens
+            continue
 
-        except Exception as exc:
-            error_msg = str(exc).lower()
-
-            # Erreurs transitoires -> petite pause puis retry si possible
-            transient = (
-                "timeout" in error_msg
-                or "timed out" in error_msg
-                or "rate limit" in error_msg
-                or "429" in error_msg
-            )
-            if attempt == 0 and transient:
-                time.sleep(2)
-                continue
-
-            if "timeout" in error_msg or "timed out" in error_msg:
-                raise HTTPException(
-                    status_code=504,
-                    detail=f"Timeout OpenAI ({settings.OPENAI_TIMEOUT}s) - Réessayez dans quelques secondes"
-                ) from exc
-
-            elif "rate limit" in error_msg or "429" in error_msg:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Limite de taux OpenAI atteinte - Réessayez dans 1 minute"
-                ) from exc
-
-            elif "quota" in error_msg or "402" in error_msg:
-                raise HTTPException(
-                    status_code=402,
-                    detail="Quota OpenAI épuisé - Vérifiez votre compte sur platform.openai.com"
-                ) from exc
-
-            elif "authentication" in error_msg or "401" in error_msg:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Clé OpenAI invalide - Vérifiez OPENAI_API_KEY dans .env"
-                ) from exc
-
-            # Erreur générique
-            raise HTTPException(
-                status_code=500,
-                detail=f"Erreur OpenAI: {str(exc)[:100]}"
-            ) from exc
-
-    # Extraction et validation de la réponse
-    try:
-        content = resp.choices[0].message.content
-        if not content or content.strip() == "":
-            raise HTTPException(
-                status_code=500,
-                detail="OpenAI a retourné une réponse vide"
-            )
-            
-    except (IndexError, AttributeError) as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="Format de réponse OpenAI inattendu"
-        ) from exc
-
-    # Parsing JSON unique avec validation
-    try:
-        data = json.loads(content)
-        
         # Validation des champs requis
         required_fields = ["title", "objectives", "plan", "content"]
         missing_fields = [field for field in required_fields if field not in data]
-        
+
         if missing_fields:
             raise HTTPException(
                 status_code=500,
                 detail=f"OpenAI n'a pas fourni les champs requis: {', '.join(missing_fields)}"
             )
-        
-        # Validation des types
+
         if not isinstance(data.get("objectives"), list):
             raise HTTPException(
-                status_code=500, 
+                status_code=500,
                 detail="Le champ 'objectives' doit être une liste"
             )
-            
+
         if not isinstance(data.get("plan"), list):
             raise HTTPException(
                 status_code=500,
                 detail="Le champ 'plan' doit être une liste"
             )
-            
-        # Validation du contenu minimum
+
         if len(data["objectives"]) < 1:
             raise HTTPException(
                 status_code=500,
                 detail="Au moins un objectif est requis"
             )
-            
+
         if len(data["plan"]) < 2:
             raise HTTPException(
-                status_code=500, 
+                status_code=500,
                 detail="Au moins 2 sections sont requises dans le plan"
             )
-        
-    except json.JSONDecodeError as exc:
+
+        try:
+            return LessonContent(**data), total_tokens
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erreur de construction LessonContent: {str(exc)[:100]}"
+            ) from exc
+
+    if last_error:
         raise HTTPException(
             status_code=500,
-            detail=f"OpenAI a retourné un JSON invalide: {str(exc)[:100]}\n"
+            detail=f"OpenAI a retourné un JSON invalide: {str(last_error)[:100]}\n"
                    f"Contenu reçu: {content[:200]}..."
-        ) from exc
-    
-    except HTTPException:
-        raise
-        
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erreur de validation de la réponse OpenAI: {str(exc)[:100]}"
-        ) from exc
+        ) from last_error
+
+    raise HTTPException(status_code=500, detail="Échec de parsing JSON sans erreur explicite")
 
     # Construction du modèle validé
     try:

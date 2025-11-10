@@ -40,7 +40,7 @@ OPENAI_API_KEY=sk-your-openai-key-here
 ### 3. Démarrer le serveur
 
 ```bash
-uvicorn api.main:app --reload
+`uvicorn api.main:app --reload`
 ```
 
 ✅ **Succès si vous voyez :**
@@ -221,7 +221,7 @@ pkill -f uvicorn
 rm skillence_ai.db
 
 # Relancer
-uvicorn api.main:app --reload
+`uvicorn api.main:app --reload`
 ```
 
 ### ❌ Tests qui échouent
@@ -292,3 +292,32 @@ Le projet suit une approche **MVP strict** :
 ## 📄 Licence
 
 À définir - Propriété Maxime (owner)
+
+## Interface web (auth lien magique)
+
+1. Lancer `uvicorn api.main:app --reload`.
+2. Ouvrir http://localhost:8000/web/login et soumettre un e-mail.
+3. Consulter les logs (logger 'skillence_ai.web') pour r�cup�rer l'URL /web/login/callback?token=....
+4. Recharger /web/dashboard pour v�rifier la session.
+
+> ??  Pour le MVP, l'envoi d'e-mail est simul� via les logs (aucun SMTP).
+## Procedure de migration (auth lien magique)
+
+1. **Sauvegarder la base actuelle**
+   ```bash
+   cp skillence_ai.db skillence_ai.db.backup
+   ```
+2. **Executer le script d'initialisation** (cree `users`, `login_tokens`, `sessions` si absentes)
+   ```bash
+   python scripts/init_users_tables.py
+   ```
+3. **Verifier**
+   ```bash
+   sqlite3 skillence_ai.db ".tables"
+   # ou
+   python -c "from storage.base import get_db_stats; print(get_db_stats())"
+   ```
+4. **Rollback rapide**
+   ```bash
+   mv skillence_ai.db.backup skillence_ai.db
+   ```

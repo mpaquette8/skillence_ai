@@ -1,20 +1,20 @@
+# // file: storage/models.py
 """
-Modèles ORM SIMPLIFIÉS (sans quiz) - MVP v0.1.2.
+Modèles ORM simplifiés pour la base SQLite (MVP v0.2 – préparation front).
 
-NETTOYAGE v0.1.2:
-- Suppression du champ quiz dans Lesson
-- Maintien des champs essentiels (objectives, plan)
-- JSON storage optimisé pour SQLite/Postgres
+Contient les tables historiques (requests, lessons) et les nouvelles tables
+front (users, login_tokens, sessions) utilisées par l’authentification lien
+magique et Google OAuth.
 """
 
 # Inventaire des dépendances
-# - sqlalchemy (tierce) : types de colonnes — String, Text, DateTime, ForeignKey
-# - sqlalchemy.orm (tierce) : ORM moderne 2.x — Mapped, mapped_column, relationship
-# - typing (stdlib) : types optionnels — List, Optional
-# - datetime (stdlib) : gestion dates UTC — datetime, timezone
-# - uuid (stdlib) : identifiants uniques — uuid4 pour clés primaires
-# - json (stdlib) : sérialisation Python/JSON — stockage listes en SQLite
-from sqlalchemy import String, Text, DateTime, ForeignKey
+# - sqlalchemy (tierce) : colonnes SQL (String, Text, DateTime, ForeignKey, UniqueConstraint)
+# - sqlalchemy.orm (tierce) : ORM 2.x (Mapped, mapped_column, relationship)
+# - typing (stdlib) : collections optionnelles (List, Optional)
+# - datetime (stdlib) : gestion de l’heure UTC (datetime, timezone)
+# - uuid (stdlib) : génération d’identifiants uniques (uuid4)
+# - json (stdlib) : sérialisation liste → JSON pour stockage SQLite
+from sqlalchemy import String, Text, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -25,68 +25,54 @@ from .base import Base
 
 
 def utcnow() -> datetime:
-    """Retourne l'heure actuelle en UTC."""
+    """Retourne l’heure actuelle en UTC (helper unique pour tous les modèles)."""
     return datetime.now(timezone.utc)
 
 
 class Request(Base):
     """
-    Table "requests" : demandes utilisateur.
-    Champs: sujet, audience, durée, hash (idempotence).
+    Table "requests" : trace chaque demande utilisateur d’une leçon.
+
+    Contient les paramètres d’entrée ainsi que le hash d’idempotence.
     """
 
     __tablename__ = "requests"
 
-    # Identifiant unique (UUID)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-
-    # Date de création (UTC)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
-    # Hash pour idempotence
     input_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
-
-    # Paramètres utilisateur
     subject: Mapped[str] = mapped_column(String(160), nullable=False)
     audience: Mapped[str] = mapped_column(String(32), nullable=False)
     duration: Mapped[str] = mapped_column(String(16), nullable=False)
 
-    # Relation : une requête → plusieurs leçons (1..n)
-    lessons: Mapped[List["Lesson"]] = relationship(back_populates="request", cascade="all, delete-orphan")
+    lessons: Mapped[List["Lesson"]] = relationship(
+        back_populates="request",
+        cascade="all, delete-orphan",
+    )
 
 
 class Lesson(Base):
     """
-    Table "lessons" : leçons générées (SANS QUIZ).
-    
-    SIMPLIFICATION v0.1.2:
-    - Suppression du champ _quiz_json
-    - Focus sur title, content_md, objectives, plan
+    Table "lessons" : contenu pédagogique généré (Markdown + plan).
+
+    Stocke également la liste des objectifs et le plan sous forme JSON.
     """
 
     __tablename__ = "lessons"
 
-    # Identifiant unique
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-
-    # Date de création
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
-    # Clé étrangère : lien vers Request
     request_id: Mapped[str] = mapped_column(ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
     request: Mapped[Request] = relationship(back_populates="lessons")
 
-    # Contenu principal
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content_md: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Champs JSON stockés comme texte (compatibilité SQLite)
     _objectives_json: Mapped[str] = mapped_column("objectives", Text, nullable=False, default="[]")
     _plan_json: Mapped[str] = mapped_column("plan", Text, nullable=False, default="[]")
-    
-    # SUPPRIMÉ: _quiz_json (reporté v0.2)
 
-    # Propriétés Python pour manipulation facile
     @property
     def objectives(self) -> List[str]:
         return json.loads(self._objectives_json or "[]")
@@ -102,3 +88,68 @@ class Lesson(Base):
     @plan.setter
     def plan(self, value: List[str]) -> None:
         self._plan_json = json.dumps(value, ensure_ascii=False)
+
+
+class User(Base):
+    """
+    Table "users" : comptes front (email + option Google).
+
+    Email unique (minuscule) et identifiant Google (google_sub) pour relier
+    un compte OAuth existant.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    email: Mapped[str] = mapped_column(String(160), unique=True, nullable=False, index=True)
+    google_sub: Mapped[Optional[str]] = mapped_column(String(64), unique=True, nullable=True, index=True)
+
+    login_tokens: Mapped[List["LoginToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    sessions: Mapped[List["UserSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class LoginToken(Base):
+    """
+    Table "login_tokens" : liens magiques envoyés par e-mail.
+
+    Utilisée pour le flux passwordless. Unicité garantie sur le token.
+    """
+
+    __tablename__ = "login_tokens"
+    __table_args__ = (UniqueConstraint("token", name="uq_login_tokens_token"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    redeemed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user: Mapped["User"] = relationship(back_populates="login_tokens")
+
+
+class UserSession(Base):
+    """
+    Table "sessions" : sessions actives (cookie HTTP).
+
+    Permet d’invalider les connexions lorsqu’un utilisateur se déconnecte.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    user_agent_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user: Mapped["User"] = relationship(back_populates="sessions")
+

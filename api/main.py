@@ -17,6 +17,7 @@ NETTOYAGE v0.1.2:
 # - api.services.lessons (local) : orchestration metier -> logique principale
 # - api.middleware.logging (local) : middleware de logs -> correlation requetes
 # - storage.base (local) : initialisation DB -> setup base de donnees
+# - web.routes (local) : routes HTML (auth lien magique)
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
@@ -27,6 +28,7 @@ from agents.lesson_generator import LessonRequest
 from api.services.lessons import create_lesson, get_lesson_by_id
 from api.middleware.logging import LoggingMiddleware
 from storage.base import init_db
+from web.routes import router as web_router
 
 # Configuration des logs (format simple pour MVP)
 logging.basicConfig(
@@ -85,6 +87,7 @@ app = FastAPI(
 
 # Ajouter le middleware de logging
 app.add_middleware(LoggingMiddleware)
+app.include_router(web_router)
 
 @app.get("/v1/health")
 def health() -> Dict[str, str]:
